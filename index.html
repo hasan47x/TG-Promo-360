@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - TG Promo 360</title>
+    
+    <!-- Bootstrap CSS & Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Your Custom Stylesheet -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Global Loader -->
+    <div id="adminLoader" style="display: none;">
+        <div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div>
+    </div>
+
+    <!-- Authentication Area -->
+    <div id="authContainer">
+        <!-- Login Form -->
+        <div id="adminLoginSection" class="login-container" style="display: none;">
+            <div class="text-center mb-4">
+                <h2>Admin Login</h2>
+                <p class="text-secondary">Please sign in to continue</p>
+            </div>
+            <form id="adminLoginForm">
+                <div class="mb-3">
+                    <label for="adminEmail" class="form-label">Email</label>
+                    <input type="email" class="form-control" id="adminEmail" required>
+                </div>
+                <div class="mb-3">
+                    <label for="adminPassword" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="adminPassword" required>
+                </div>
+                <div id="adminLoginStatus" class="alert mt-3" style="display: none;"></div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">Login</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Admin Panel Area -->
+    <div id="adminMainArea" style="display: none;">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <button class="menu-toggle-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#adminSidebar">
+                    <i class="bi bi-list"></i>
+                </button>
+                <h1 class="header-title" id="adminPageTitle">Dashboard</h1>
+            </div>
+            <div class="header-right">
+                <span class="admin-email-header" id="adminUserEmail"></span>
+                <button class="btn btn-sm btn-outline-danger" id="adminLogoutBtn"><i class="bi bi-box-arrow-right"></i> Logout</button>
+            </div>
+        </header>
+
+        <!-- Sidebar (Off-canvas) -->
+        <div class="offcanvas offcanvas-start" tabindex="-1" id="adminSidebar">
+            <div class="offcanvas-header">
+                <h5 class="offcanvas-title">TG Promo 360</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+            </div>
+            <div class="offcanvas-body">
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#" data-section="dashboard-section"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="posts-section"><i class="bi bi-mailbox"></i> Post Management <span class="badge bg-warning ms-1" id="pendingPostsCountBadge">0</span></a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="users-section"><i class="bi bi-people"></i> User Management</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="tags-channels-section"><i class="bi bi-tags"></i> Tags & Channels</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="payments-section"><i class="bi bi-cash-coin"></i> Payment Requests <span class="badge bg-warning ms-1" id="pendingPaymentsCountBadge">0</span></a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="settings-section"><i class="bi bi-gear"></i> System Settings</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content" id="adminMainContent">
+            <!-- Dashboard Section -->
+            <section id="dashboard-section" class="section active">
+                <div class="row">
+                    <div class="col-lg-3 col-md-6 mb-4"><div class="card text-bg-primary"><div class="card-body"><h5 class="card-title">Total Users</h5><p class="fs-3 fw-bold" id="statTotalUsers">0</p><i class="bi bi-people-fill dash-card-icon"></i></div></div></div>
+                    <div class="col-lg-3 col-md-6 mb-4"><div class="card text-bg-info"><div class="card-body"><h5 class="card-title">Total Posts</h5><p class="fs-3 fw-bold" id="statTotalPosts">0</p><i class="bi bi-file-earmark-text-fill dash-card-icon"></i></div></div></div>
+                    <div class="col-lg-3 col-md-6 mb-4"><div class="card text-bg-warning"><div class="card-body"><h5 class="card-title">Pending Posts</h5><p class="fs-3 fw-bold" id="statPendingPosts">0</p><i class="bi bi-hourglass-split dash-card-icon"></i></div></div></div>
+                    <div class="col-lg-3 col-md-6 mb-4"><div class="card text-bg-danger"><div class="card-body"><h5 class="card-title">Pending Payments</h5><p class="fs-3 fw-bold" id="statPendingPayments">0</p><i class="bi bi-wallet2 dash-card-icon"></i></div></div></div>
+                </div>
+            </section>
+
+            <!-- Post Management Section -->
+            <section id="posts-section" class="section">
+                <div class="card">
+                    <div class="card-header"><h5 class="card-title mb-0">Review Pending Posts</h5></div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead><tr><th>User</th><th>Content</th><th>Tags</th><th>Actions</th></tr></thead>
+                            <tbody id="pendingPostsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- User Management Section -->
+            <section id="users-section" class="section">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Manage Users</h5>
+                        <input type="search" class="form-control form-control-sm w-auto" id="userSearchInput" placeholder="Search by ID or Name...">
+                    </div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead><tr><th>User ID</th><th>Name</th><th>Points</th><th>Joined</th><th>Actions</th></tr></thead>
+                            <tbody id="usersTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tags & Channels Section -->
+            <section id="tags-channels-section" class="section">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Manage Tags</h5>
+                                <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#tagModal"><i class="bi bi-plus-circle"></i> Add Tag</button>
+                            </div>
+                            <div class="card-body p-0">
+                                <ul class="list-group list-group-flush" id="tagsList"></ul>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header"><h5 class="mb-0">Link Channels to Tags</h5></div>
+                            <div class="card-body">
+                                <form id="linkChannelForm">
+                                    <div class="mb-3"><label for="selectTag" class="form-label">Select Tag</label><select class="form-select" id="selectTag"></select></div>
+                                    <div class="mb-3"><label for="channelUsername" class="form-label">Channel Username</label><input type="text" class="form-control" id="channelUsername" placeholder="@channel_username" required></div>
+                                    <button type="submit" class="btn btn-primary">Link Channel</button>
+                                </form>
+                                <hr>
+                                <h6>Linked Channels</h6>
+                                <div id="linkedChannelsContainer"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Payment Requests Section -->
+            <section id="payments-section" class="section">
+                <div class="card">
+                    <div class="card-header"><h5 class="card-title mb-0">Review Payment Requests</h5></div>
+                    <div class="card-body table-responsive p-0">
+                        <table class="table table-hover">
+                            <thead><tr><th>User</th><th>Amount (BDT)</th><th>TrxID</th><th>Time</th><th>Actions</th></tr></thead>
+                            <tbody id="paymentRequestsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- System Settings Section -->
+            <section id="settings-section" class="section">
+                <div class="card">
+                    <div class="card-header"><h5 class="card-title mb-0">System & Economy Settings</h5></div>
+                    <div class="card-body">
+                        <form id="settingsForm">
+                            <h6>Economy Settings</h6>
+                            <div class="row">
+                                <div class="col-md-4 mb-3"><label for="settingJoinBonus" class="form-label">Join Bonus</label><input type="number" class="form-control" id="settingJoinBonus"></div>
+                                <div class="col-md-4 mb-3"><label for="settingDailyBonus" class="form-label">Daily Bonus</label><input type="number" class="form-control" id="settingDailyBonus"></div>
+                                <div class="col-md-4 mb-3"><label for="settingReferralBonus" class="form-label">Referral Bonus</label><input type="number" class="form-control" id="settingReferralBonus"></div>
+                                <div class="col-md-4 mb-3"><label for="settingPostCost" class="form-label">Post Cost</label><input type="number" class="form-control" id="settingPostCost"></div>
+                            </div>
+                            <hr>
+                            <h6>Bot & Payment Settings</h6>
+                             <div class="row">
+                                <div class="col-md-6 mb-3"><label for="settingPaymentNumber" class="form-label">Payment Number (Bkash/Nagad)</label><input type="text" class="form-control" id="settingPaymentNumber"></div>
+                             </div>
+                            <button type="submit" class="btn btn-success"><i class="bi bi-save"></i> Save Settings</button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Tag Modal -->
+    <div class="modal fade" id="tagModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Add New Tag</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <form id="addTagForm">
+                        <div class="mb-3"><label for="tagName" class="form-label">Tag Name (without #)</label><input type="text" class="form-control" id="tagName" required></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="saveTagBtn">Save Tag</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- User Detail/Edit Modal -->
+    <div class="modal fade" id="userModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title" id="userModalTitle">User Details</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <p><strong>User ID:</strong> <span id="userDetailId"></span></p>
+                    <p><strong>Name:</strong> <span id="userDetailName"></span></p>
+                    <p><strong>Points:</strong> <span id="userDetailPoints"></span></p>
+                    <hr>
+                    <h6>Update Points</h6>
+                    <form id="updatePointsForm">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="pointsUpdateAmount" placeholder="e.g., 50 or -20" required>
+                            <button class="btn btn-warning" type="submit">Update</button>
+                        </div>
+                        <input type="text" class="form-control mt-2" id="pointsUpdateReason" placeholder="Reason for update (e.g., payment)" required>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+     <!-- Post Content View Modal -->
+    <div class="modal fade" id="postContentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header"><h5 class="modal-title">Post Content</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body" id="postContentModalBody" style="white-space: pre-wrap;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK (Using Modules for modern JS) -->
+    <script type="module" src="script.js"></script>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
