@@ -1,17 +1,18 @@
 {
   "APPS_SCRIPT_WEB_APP_URL": "YOUR_APPS_SCRIPT_WEB_APP_URL",
-  "TELEGRAM_BOT_TOKEN": "YOUR_TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_BOT_TOKEN": "7585650929:AAGmnl3QSj4u16XIGTt_aMHTL-mggdJw6D4",
   "FIREBASE_CONFIG": {
-    "apiKey": "YOUR_FIREBASE_API_KEY",
-    "authDomain": "YOUR_FIREBASE_AUTH_DOMAIN",
-    "databaseURL": "YOUR_FIREBASE_DATABASE_URL",
-    "projectId": "YOUR_FIREBASE_PROJECT_ID",
-    "storageBucket": "YOUR_FIREBASE_STORAGE_BUCKET",
-    "messagingSenderId": "YOUR_FIREBASE_MESSAGING_SENDER_ID",
-    "appId": "YOUR_FIREBASE_APP_ID"
-  },
+    "apiKey": "AIzaSyAe3TMK4RHmReffbhxZeYi5NuHgmJJWlTo",
+  "authDomain": "supchat-5474d.firebaseapp.com",
+  "databaseURL": "https://supchat-5474d-default-rtdb.firebaseio.com",
+  "projectId": "supchat-5474d",
+  "storageBucket": "supchat-5474d.appspot.com",
+  "messagingSenderId": "170794585438",
+  "appId": "1:170794585438:web:da9cb1f6d7cc3408b493cf",
+  "measurementId": "G-NEWFJBQSB9"
+};
   "ADMIN_CREDENTIALS": {
-    "email": "admin@example.com",
+    "email": "admin@gmail.com",
     "password": "adminpass"
   }
 }
