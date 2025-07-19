@@ -1,5 +1,5 @@
 {
-  "APPS_SCRIPT_WEB_APP_URL": "YOUR_APPS_SCRIPT_WEB_APP_URL",
+  "APPS_SCRIPT_WEB_APP_URL": "https://script.google.com/macros/s/AKfycbwv6_2-1dwC6e2stwVwllIxmBTjjzNyT1kiQIAaB5HGYG8Mxyv4q_4dlg0ZdxyYLFmj/exec",
   "TELEGRAM_BOT_TOKEN": "7585650929:AAGmnl3QSj4u16XIGTt_aMHTL-mggdJw6D4",
   "FIREBASE_CONFIG": {
     "apiKey": "AIzaSyAe3TMK4RHmReffbhxZeYi5NuHgmJJWlTo",
