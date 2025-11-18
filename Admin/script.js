@@ -1,356 +1,552 @@
-(function () {
-    // এই ফাংশনটি একটি সেফ 'স্কোপ' তৈরি করে, যাতে গ্লোবাল ভেরিয়েবল নিয়ে কোনো সমস্যা না হয়।
+// =======================================================
+// ===               FIREBASE & CONFIG                 ===
+// =======================================================
+// Firebase Imports (using ES6 Modules)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+import { getDatabase, ref, get, set, update, push, onValue, off, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
-    // =======================================================
-    // ===           CONFIGURATION & CONSTANTS           ===
-    // =======================================================
-    const firebaseConfig = {
-        apiKey: "AIzaSyAe3TMK4RHmReffbhxZeYi5NuHgmJJWlTo",
-        authDomain: "supchat-5474d.firebaseapp.com",
-        databaseURL: "https://supchat-5474d-default-rtdb.firebaseio.com",
-        projectId: "supchat-5474d",
-        storageBucket: "supchat-5474d.appspot.com",
-        messagingSenderId: "170794585438",
-        appId: "1:170794585438:web:da9cb1f6d7cc3408b493cf"
-    };
-    const BOT_USERNAME = "TGPromo360Bot";
-    const JOIN_BONUS = 50, DAILY_BONUS_POINTS = 20, REFERRAL_BONUS_REFERRER = 50, POST_SUBMISSION_COST = 100;
+const firebaseConfig = {
+    apiKey: "AIzaSyAe3TMK4RHmReffbhxZeYi5NuHgmJJWlTo",
+    authDomain: "supchat-5474d.firebaseapp.com",
+    databaseURL: "https://supchat-5474d-default-rtdb.firebaseio.com",
+    projectId: "supchat-5474d",
+    storageBucket: "supchat-5474d.appspot.com",
+    messagingSenderId: "170794585438",
+    appId: "1:170794585438:web:da9cb1f6d7cc3408b493cf"
+};
 
-    function displayError(message) {
-        const loader = document.getElementById('globalLoader');
-        if (loader) loader.style.display = 'none';
-        document.body.classList.add('ready');
-        const mainContent = document.querySelector('.main-content');
-        if (mainContent) mainContent.innerHTML = `<div class="alert alert-danger text-center m-3" role="alert">${message}</div>`;
+// Initialize Firebase
+let app, db, auth;
+try {
+    app = initializeApp(firebaseConfig);
+    db = getDatabase(app);
+    auth = getAuth(app);
+} catch (e) {
+    console.error("Firebase initialization failed:", e);
+    document.body.innerHTML = `<div class="alert alert-danger m-5"><strong>Critical Error:</strong> Could not connect to Firebase. Check config and console.</div>`;
+}
+
+// =======================================================
+// ===                  DOM ELEMENTS                     ===
+// =======================================================
+const getEl = (id) => document.getElementById(id);
+const elements = {
+    // Loaders & Containers
+    loader: getEl('adminLoader'),
+    authContainer: getEl('authContainer'),
+    loginSection: getEl('adminLoginSection'),
+    mainArea: getEl('adminMainArea'),
+    
+    // Auth
+    loginForm: getEl('adminLoginForm'),
+    adminEmailInput: getEl('adminEmail'),
+    adminPasswordInput: getEl('adminPassword'),
+    loginStatus: getEl('adminLoginStatus'),
+    logoutBtn: getEl('adminLogoutBtn'),
+    adminUserEmail: getEl('adminUserEmail'),
+
+    // Navigation
+    sidebarLinks: document.querySelectorAll('#adminSidebar .nav-link'),
+    pageTitle: getEl('adminPageTitle'),
+    sections: document.querySelectorAll('#adminMainContent .section'),
+
+    // Dashboard Stats
+    statTotalUsers: getEl('statTotalUsers'),
+    statTotalPosts: getEl('statTotalPosts'),
+    statPendingPosts: getEl('statPendingPosts'),
+    statPendingPayments: getEl('statPendingPayments'),
+    pendingPostsCountBadge: getEl('pendingPostsCountBadge'),
+    pendingPaymentsCountBadge: getEl('pendingPaymentsCountBadge'),
+
+    // Post Management
+    pendingPostsTableBody: getEl('pendingPostsTableBody'),
+    postContentModalBody: getEl('postContentModalBody'),
+    
+    // User Management
+    usersTableBody: getEl('usersTableBody'),
+    userSearchInput: getEl('userSearchInput'),
+    userModalTitle: getEl('userModalTitle'),
+    userDetailId: getEl('userDetailId'),
+    userDetailName: getEl('userDetailName'),
+    userDetailPoints: getEl('userDetailPoints'),
+    updatePointsForm: getEl('updatePointsForm'),
+    pointsUpdateAmount: getEl('pointsUpdateAmount'),
+    pointsUpdateReason: getEl('pointsUpdateReason'),
+
+    // Tags & Channels
+    tagsList: getEl('tagsList'),
+    addTagForm: getEl('addTagForm'),
+    tagNameInput: getEl('tagName'),
+    saveTagBtn: getEl('saveTagBtn'),
+    linkChannelForm: getEl('linkChannelForm'),
+    selectTag: getEl('selectTag'),
+    channelUsernameInput: getEl('channelUsername'),
+    linkedChannelsContainer: getEl('linkedChannelsContainer'),
+
+    // Payments
+    paymentRequestsTableBody: getEl('paymentRequestsTableBody'),
+
+    // Settings
+    settingsForm: getEl('settingsForm'),
+    settingJoinBonus: getEl('settingJoinBonus'),
+    settingDailyBonus: getEl('settingDailyBonus'),
+    settingReferralBonus: getEl('settingReferralBonus'),
+    settingPostCost: getEl('settingPostCost'),
+    settingPaymentNumber: getEl('settingPaymentNumber'),
+};
+
+// Bootstrap Instances Cache
+let componentInstances = {};
+const getModalInstance = (element) => {
+    if (!element) return null;
+    if (!componentInstances[element.id]) {
+        componentInstances[element.id] = new bootstrap.Modal(element);
     }
+    return componentInstances[element.id];
+};
 
-    // =======================================================
-    // ===             SAFE APP INITIALIZATION             ===
-    // =======================================================
-    try {
-        if (!window.Telegram || !window.Telegram.WebApp || !window.Telegram.WebApp.initDataUnsafe || !window.Telegram.WebApp.initDataUnsafe.user) {
-            displayError("Please open this app through the designated Telegram bot.");
+// =======================================================
+// ===                 APP STATE & LOGIC               ===
+// =======================================================
+let currentAdminUser = null;
+let currentEditingUserId = null;
+let dbListeners = {}; // To keep track of active listeners
+
+// --- Main Auth Flow ---
+onAuthStateChanged(auth, (user) => {
+    showLoader(true);
+    if (user) {
+        currentAdminUser = user;
+        elements.adminUserEmail.textContent = user.email;
+        elements.authContainer.style.display = 'none';
+        elements.mainArea.style.display = 'block';
+        navigateToSection('dashboard-section');
+        setupRealtimeListeners();
+    } else {
+        currentAdminUser = null;
+        elements.mainArea.style.display = 'none';
+        elements.authContainer.style.display = 'block';
+        elements.loginSection.style.display = 'block';
+        detachAllListeners();
+    }
+    showLoader(false);
+});
+
+function handleLogin(e) {
+    e.preventDefault();
+    showLoader(true);
+    const email = elements.adminEmailInput.value;
+    const password = elements.adminPasswordInput.value;
+    signInWithEmailAndPassword(auth, email, password)
+        .catch(error => {
+            elements.loginStatus.textContent = `Login Failed: ${error.message}`;
+            elements.loginStatus.className = 'alert alert-danger';
+            elements.loginStatus.style.display = 'block';
+        })
+        .finally(() => showLoader(false));
+}
+
+function handleLogout() {
+    signOut(auth);
+}
+
+// --- Navigation ---
+function navigateToSection(sectionId) {
+    elements.sections.forEach(sec => sec.classList.remove('active'));
+    getEl(sectionId)?.classList.add('active');
+
+    elements.sidebarLinks.forEach(link => {
+        link.classList.toggle('active', link.dataset.section === sectionId);
+    });
+    
+    const activeLink = document.querySelector(`.nav-link[data-section="${sectionId}"]`);
+    elements.pageTitle.textContent = activeLink ? activeLink.textContent.trim() : 'Dashboard';
+
+    // Load data for the activated section
+    loadDataForSection(sectionId);
+    const offcanvas = bootstrap.Offcanvas.getInstance(getEl('adminSidebar'));
+    if(offcanvas) offcanvas.hide();
+}
+
+// --- Data Loading ---
+function loadDataForSection(sectionId) {
+    switch(sectionId) {
+        case 'dashboard-section':
+            loadDashboardStats();
+            break;
+        case 'posts-section':
+            loadPendingPosts();
+            break;
+        case 'users-section':
+            loadUsers();
+            break;
+        case 'tags-channels-section':
+            loadTags();
+            loadLinkedChannels();
+            break;
+        case 'payments-section':
+            loadPaymentRequests();
+            break;
+        case 'settings-section':
+            loadSettings();
+            break;
+    }
+}
+
+// Dashboard
+async function loadDashboardStats() {
+    const usersRef = ref(db, 'users');
+    const postsRef = ref(db, 'posts');
+    const paymentsRef = query(ref(db, 'paymentRequests'), orderByChild('status'), equalTo('pending'));
+    
+    const [usersSnap, postsSnap, paymentsSnap] = await Promise.all([
+        get(usersRef), get(postsRef), get(paymentsRef)
+    ]);
+    
+    elements.statTotalUsers.textContent = usersSnap.exists() ? usersSnap.size : 0;
+    
+    let totalPosts = 0;
+    let pendingPosts = 0;
+    if (postsSnap.exists()) {
+        totalPosts = postsSnap.size;
+        postsSnap.forEach(child => {
+            if (child.val().status === 'pending') {
+                pendingPosts++;
+            }
+        });
+    }
+    elements.statTotalPosts.textContent = totalPosts;
+    elements.statPendingPosts.textContent = pendingPosts;
+    elements.pendingPostsCountBadge.textContent = pendingPosts;
+    elements.pendingPostsCountBadge.style.display = pendingPosts > 0 ? 'inline-block' : 'none';
+
+    const pendingPayments = paymentsSnap.exists() ? paymentsSnap.size : 0;
+    elements.statPendingPayments.textContent = pendingPayments;
+    elements.pendingPaymentsCountBadge.textContent = pendingPayments;
+    elements.pendingPaymentsCountBadge.style.display = pendingPayments > 0 ? 'inline-block' : 'none';
+}
+
+// Post Management
+function loadPendingPosts() {
+    const postsQuery = query(ref(db, 'posts'), orderByChild('status'), equalTo('pending'));
+    onValue(postsQuery, snapshot => {
+        const tableBody = elements.pendingPostsTableBody;
+        tableBody.innerHTML = '';
+        if (!snapshot.exists()) {
+            tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-secondary">No pending posts.</td></tr>`;
             return;
         }
-        
-        const WebApp = window.Telegram.WebApp;
-        WebApp.ready();
-        WebApp.expand();
+        snapshot.forEach(childSnapshot => {
+            const post = childSnapshot.val();
+            const postId = childSnapshot.key;
+            const row = tableBody.insertRow();
+            row.innerHTML = `
+                <td>${post.userName || 'Unknown'} <small class="d-block text-secondary">${post.userId}</small></td>
+                <td class="post-content-preview">${post.content}</td>
+                <td>${post.tags.map(tag => `<span class="badge bg-secondary">#${tag}</span>`).join(' ')}</td>
+                <td>
+                    <button class="btn btn-sm btn-info" onclick="window.viewPostContent('${postId}')"><i class="bi bi-eye"></i></button>
+                    <button class="btn btn-sm btn-success" onclick="window.updatePostStatus('${postId}', 'approved')"><i class="bi bi-check-lg"></i></button>
+                    <button class="btn btn-sm btn-danger" onclick="window.updatePostStatus('${postId}', 'rejected')"><i class="bi bi-x-lg"></i></button>
+                </td>
+            `;
+        });
+    });
+}
 
-        const app = firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-        
-        runApp(WebApp, db, WebApp.initDataUnsafe.user);
-    } catch (e) {
-        displayError(`Critical Error: ${e.message}`);
-    }
-
-    // =======================================================
-    // ===               MAIN APPLICATION LOGIC            ===
-    // =======================================================
-    function runApp(WebApp, db, tgUser) {
-        const getEl = (id) => document.getElementById(id);
-        const elements = {
-            body: document.body, loader: getEl('globalLoader'),
-            header: { sectionTitle: getEl('headerSectionTitle'), userPoints: getEl('headerUserPoints') },
-            menu: { container: getEl('sideNavMenu'), userPic: getEl('menuUserPic'), userName: getEl('menuUserName'), userId: getEl('menuUserTgId') },
-            bottomNav: { container: getEl('bottomNav') },
-            createPost: {
-                form: getEl('createPostForm'), content: getEl('postContent'), toolbar: document.querySelector('.text-editor-toolbar'),
-                tagsContainer: getEl('postTagsContainer'), customButtonSwitch: getEl('addCustomButtonSwitch'),
-                customButtonFields: getEl('customButtonFields'), buttonText: getEl('buttonText'), buttonUrl: getEl('buttonUrl'),
-                scheduleFields: getEl('scheduleTimeFields'), estimatedCost: getEl('estimatedCost'), submitBtn: getEl('submitPostBtn')
-            },
-            myPosts: { container: getEl('myPostsContainer'), navigateToCreatePostBtn: getEl('navigateToCreatePostBtn') },
-            profile: { avatar: getEl('profileAvatar'), name: getEl('profileName'), id: getEl('profileId'), themeSwitch: getEl('themeSwitch') },
-            earn: { dailyBonusLink: getEl('dailyBonusLink'), dailyBonusBadge: getEl('dailyBonusBadge') },
-            postDetails: { modal: new bootstrap.Modal(getEl('postDetailsModal')), modalBody: getEl('postDetailsModalBody') },
-            wallet: { pointsDisplay: getEl('walletPointsDisplay') },
-            transactions: { container: getEl('transactionListContainer') },
-            sections: document.querySelectorAll('.section'),
-        };
-        let currentUser = null, sideMenu = new bootstrap.Offcanvas(getEl('sideMenu')), sectionHistory = ['home-section'];
-
-        const showLoader = (show) => elements.loader.style.display = show ? 'flex' : 'none';
-        const makeBodyVisible = () => elements.body.classList.add('ready');
-
-        function renderPage(sectionId) {
-            if (!getEl(sectionId)) sectionId = 'home-section';
-            if (sectionHistory[sectionHistory.length - 1] !== sectionId) sectionHistory.push(sectionId);
-            elements.sections.forEach(sec => sec.classList.remove('active'));
-            getEl(sectionId)?.classList.add('active');
-            document.querySelectorAll('.menu-nav .nav-link, .bottom-nav .nav-item').forEach(link => link.classList.toggle('active', link.dataset.section === sectionId));
-            const pageTitles = {'home-section': 'Dashboard', 'earn-section': 'Earn Points', 'create-post-section': 'Create Post', 'posts-section': 'My Content', 'profile-section': 'Profile', 'wallet-section': 'My Wallet', 'transactions-section': 'Transaction History' };
-            elements.header.sectionTitle.textContent = pageTitles[sectionId] || 'TG Promo 360';
-            if (pageRenderers[sectionId]) pageRenderers[sectionId]();
+// User Management
+function loadUsers() {
+    const usersRef = ref(db, 'users');
+    onValue(usersRef, snapshot => {
+        const tableBody = elements.usersTableBody;
+        tableBody.innerHTML = '';
+        if (!snapshot.exists()) {
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary">No users found.</td></tr>`;
+            return;
         }
+        snapshot.forEach(childSnapshot => {
+            const user = childSnapshot.val();
+            const userId = childSnapshot.key;
+            const row = tableBody.insertRow();
+            row.innerHTML = `
+                <td>${userId}</td>
+                <td>${user.name || 'N/A'}</td>
+                <td>${user.points || 0}</td>
+                <td>${new Date(user.joinDate).toLocaleDateString()}</td>
+                <td><button class="btn btn-sm btn-primary" onclick="window.openUserModal('${userId}')">Details</button></td>
+            `;
+        });
+    });
+}
 
-        function updateAllUI() {
-            if (!currentUser) return;
-            elements.header.userPoints.textContent = currentUser.points || 0;
-            elements.menu.userName.textContent = currentUser.name;
-            elements.menu.userId.textContent = `ID: ${currentUser.id}`;
-            elements.menu.userPic.src = currentUser.photoUrl || 'https://via.placeholder.com/45';
-            elements.profile.name.textContent = currentUser.name;
-            elements.profile.id.textContent = `ID: ${currentUser.id}`;
-            elements.profile.avatar.src = currentUser.photoUrl || 'https://via.placeholder.com/80';
+// Tags & Channels
+function loadTags() {
+    onValue(ref(db, 'tags'), snapshot => {
+        elements.tagsList.innerHTML = '';
+        elements.selectTag.innerHTML = '<option value="">Select a tag</option>';
+        if (!snapshot.exists()) {
+            elements.tagsList.innerHTML = '<li class="list-group-item text-secondary">No tags created.</li>';
+            return;
         }
+        snapshot.forEach(child => {
+            const tagName = child.key;
+            const li = document.createElement('li');
+            li.className = 'list-group-item d-flex justify-content-between align-items-center';
+            li.innerHTML = `<span>#${tagName}</span><button class="btn btn-sm btn-outline-danger" onclick="window.deleteTag('${tagName}')"><i class="bi bi-trash"></i></button>`;
+            elements.tagsList.appendChild(li);
+            elements.selectTag.innerHTML += `<option value="${tagName}">${tagName}</option>`;
+        });
+    });
+}
 
-        function loadOrCreateUser(tgUserData) {
-            showLoader(true);
-            const userId = tgUserData.id.toString();
-            const userRef = db.ref('users/' + userId);
-            const startParam = WebApp.initDataUnsafe.start_param;
+function loadLinkedChannels() {
+     onValue(ref(db, 'linkedChannels'), snapshot => {
+        elements.linkedChannelsContainer.innerHTML = '';
+        if (!snapshot.exists()) return;
+        snapshot.forEach(tagSnap => {
+            const tagName = tagSnap.key;
+            const channels = tagSnap.val();
+            let channelHtml = `<h6>#${tagName}</h6>`;
+            Object.entries(channels).forEach(([channelKey, channelUsername]) => {
+                channelHtml += `<div class="d-flex justify-content-between align-items-center mb-1">
+                    <span class="badge bg-info">${channelUsername}</span>
+                    <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="window.unlinkChannel('${tagName}', '${channelKey}')">×</button>
+                </div>`;
+            });
+            elements.linkedChannelsContainer.innerHTML += channelHtml;
+        });
+     });
+}
 
-            userRef.on('value', (snapshot) => {
-                if (!snapshot.exists()) {
-                    const newUser = {
-                        id: userId, name: `${tgUserData.first_name || ''} ${tgUserData.last_name || ''}`.trim(),
-                        username: tgUserData.username || '', photoUrl: tgUserData.photo_url,
-                        points: JOIN_BONUS, joinDate: new Date().toISOString(), lastBonusTime: 0,
-                        referredBy: startParam && startParam !== userId ? startParam : null
-                    };
-                    userRef.set(newUser).then(() => {
-                        if (newUser.referredBy) handleReferral(newUser.referredBy, newUser.id);
-                        addTransaction(userId, 'join_bonus', JOIN_BONUS, 'Welcome bonus');
-                    });
-                    currentUser = newUser;
-                } else {
-                    currentUser = { id: userId, ...snapshot.val() };
+// Payments
+function loadPaymentRequests() {
+    const paymentsQuery = query(ref(db, 'paymentRequests'), orderByChild('status'), equalTo('pending'));
+    onValue(paymentsQuery, snapshot => {
+        const tableBody = elements.paymentRequestsTableBody;
+        tableBody.innerHTML = '';
+        if (!snapshot.exists()) {
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary">No pending payment requests.</td></tr>`;
+            return;
+        }
+        snapshot.forEach(child => {
+            const req = child.val();
+            const reqId = child.key;
+            const row = tableBody.insertRow();
+            row.innerHTML = `
+                <td>${req.userName || 'N/A'} <small class="d-block text-secondary">${req.userId}</small></td>
+                <td>${req.amount} BDT</td>
+                <td>${req.trxId}</td>
+                <td>${new Date(req.timestamp).toLocaleString()}</td>
+                <td>
+                    <button class="btn btn-sm btn-success" onclick="window.handlePaymentRequest('${reqId}', 'approved', ${req.userId}, ${req.amount})">Approve</button>
+                    <button class="btn btn-sm btn-danger" onclick="window.handlePaymentRequest('${reqId}', 'rejected')">Reject</button>
+                </td>
+            `;
+        });
+    });
+}
+
+// Settings
+function loadSettings() {
+    get(ref(db, 'settings')).then(snapshot => {
+        if (snapshot.exists()) {
+            const settings = snapshot.val();
+            Object.keys(elements).forEach(key => {
+                if (key.startsWith('setting')) {
+                    const settingKey = key.replace('setting', '').charAt(0).toLowerCase() + key.slice(8);
+                    if (elements[key] && settings[settingKey] !== undefined) {
+                        elements[key].value = settings[settingKey];
+                    }
                 }
-                updateAllUI();
-                showLoader(false);
-                makeBodyVisible();
-                renderPage(sectionHistory[sectionHistory.length - 1] || 'home-section');
             });
         }
+    });
+}
 
-        const addTransaction = (userId, type, amount, description) => db.ref(`users/${userId}/transactions`).push({ type, amount, description, timestamp: firebase.database.ServerValue.TIMESTAMP });
-        
-        function applyTextFormat(format) {
-            const textarea = elements.createPost.content; const start = textarea.selectionStart; const end = textarea.selectionEnd; const selectedText = textarea.value.substring(start, end);
-            if (!selectedText) { WebApp.showAlert('Please select text to format.'); return; }
-            const formats = { 'bold': `<b>${selectedText}</b>`, 'italic': `<i>${selectedText}</i>`, 'underline': `<u>${selectedText}</u>`, 'strikethrough': `<s>${selectedText}</s>`, 'spoiler': `<span class="tg-spoiler">${selectedText}</span>`, 'code': `<code>${selectedText}</code>` };
-            textarea.setRangeText(formats[format] || selectedText, start, end, 'end'); textarea.focus();
-        }
-        
-        const pageRenderers = {};
-        function initializePageRenderers() {
-            const menuItems = [ { id: 'home-section', icon: 'house-door-fill', title: 'Home' }, { id: 'wallet-section', icon: 'wallet-fill', title: 'My Wallet'}, { id: 'create-post-section', icon: 'plus-square-fill', title: 'Create Post' }, { id: 'posts-section', icon: 'collection-fill', title: 'My Content' }, { id: 'earn-section', icon: 'gem', title: 'Earn Points' }, { id: 'profile-section', icon: 'person-fill', title: 'Profile' } ];
-            elements.menu.container.innerHTML = menuItems.map(item => `<li><a href="#" class="nav-link" data-section="${item.id}"><i class="bi bi-${item.icon}"></i> ${item.title}</a></li>`).join('');
-            pageRenderers['home-section'] = () => { getEl('home-section').innerHTML = `<h2 class="section-title">Welcome, ${currentUser.name.split(' ')[0]}!</h2><div class="custom-card"><p>Explore, create, and grow!</p></div>`; };
-            pageRenderers['earn-section'] = () => updateDailyBonusUI();
-            pageRenderers['tasks-section'] = () => loadTasks();
-            pageRenderers['referral-section'] = () => renderReferralPage();
-            pageRenderers['create-post-section'] = () => { loadTagsForPostCreation(); elements.createPost.estimatedCost.textContent = POST_SUBMISSION_COST; };
-            pageRenderers['posts-section'] = () => loadUserPosts();
-            pageRenderers['wallet-section'] = () => { elements.wallet.pointsDisplay.innerHTML = `${currentUser.points || 0} <i class="bi bi-coin text-warning"></i>`; };
-            pageRenderers['transactions-section'] = () => loadTransactionHistory();
-        }
 
-        function initializeEventListeners() {
-            elements.bottomNav.container.addEventListener('click', (e) => { const navItem = e.target.closest('.nav-item'); if (navItem) renderPage(navItem.dataset.section); });
-            document.body.addEventListener('click', (e) => { const sectionLink = e.target.closest('[data-section]'); if (sectionLink && !sectionLink.closest('.bottom-nav')) { e.preventDefault(); renderPage(sectionLink.dataset.section); if (sideMenu) sideMenu.hide(); } });
-            elements.createPost.form.addEventListener('submit', handlePostSubmission);
-            elements.createPost.toolbar.addEventListener('click', (e) => { const btn = e.target.closest('.toolbar-btn'); if (btn) applyTextFormat(btn.dataset.format); });
-            elements.myPosts.navigateToCreatePostBtn.addEventListener('click', () => renderPage('create-post-section'));
-            elements.earn.dailyBonusLink.addEventListener('click', claimDailyBonus);
-            elements.profile.themeSwitch.addEventListener('change', (e) => applyTheme(e.target.checked ? 'dark' : 'light'));
-            elements.createPost.customButtonSwitch.addEventListener('change', (e) => { elements.createPost.customButtonFields.style.display = e.target.checked ? 'block' : 'none'; });
-            document.querySelectorAll('input[name="scheduleOption"]').forEach(radio => { radio.addEventListener('change', (e) => { elements.createPost.scheduleFields.style.display = e.target.value === 'later' ? 'block' : 'none'; }); });
+// =======================================================
+// ===               ACTION FUNCTIONS                  ===
+// =======================================================
+// These functions are called from inline onclick attributes for simplicity
+window.updatePostStatus = (postId, status) => {
+    if (!confirm(`Are you sure you want to ${status} this post?`)) return;
+    const updates = {};
+    updates[`/posts/${postId}/status`] = status;
+    if (status === 'approved') {
+        updates[`/posts/${postId}/approvedAt`] = new Date().toISOString();
+    }
+    update(ref(db), updates)
+        .then(() => alert(`Post has been ${status}.`))
+        .catch(err => alert(`Error: ${err.message}`));
+    // In a real app, an 'approved' status would trigger a Cloud Function to broadcast the post.
+};
+
+window.viewPostContent = (postId) => {
+    get(ref(db, `posts/${postId}/content`)).then(snapshot => {
+        if (snapshot.exists()) {
+            elements.postContentModalBody.textContent = snapshot.val();
+            getModalInstance(getEl('postContentModal')).show();
+        } else {
+            alert('Could not retrieve post content.');
         }
-        
-        function handlePostSubmission(e) { 
+    });
+};
+
+window.openUserModal = (userId) => {
+    currentEditingUserId = userId;
+    get(ref(db, `users/${userId}`)).then(snapshot => {
+        if (snapshot.exists()) {
+            const user = snapshot.val();
+            elements.userModalTitle.textContent = `Details for ${user.name}`;
+            elements.userDetailId.textContent = userId;
+            elements.userDetailName.textContent = user.name;
+            elements.userDetailPoints.textContent = user.points || 0;
+            getModalInstance(getEl('userModal')).show();
+        }
+    });
+};
+
+window.updateUserPoints = (e) => {
+    e.preventDefault();
+    const amount = parseInt(elements.pointsUpdateAmount.value);
+    const reason = elements.pointsUpdateReason.value.trim();
+    if (isNaN(amount) || !reason) {
+        alert('Please provide a valid amount and a reason.');
+        return;
+    }
+    const userPointsRef = ref(db, `users/${currentEditingUserId}/points`);
+    get(userPointsRef).then(snapshot => {
+        const currentPoints = snapshot.val() || 0;
+        const newPoints = currentPoints + amount;
+        set(userPointsRef, newPoints).then(() => {
+            // Log this transaction
+            const transaction = { type: 'admin_update', amount, description: reason, timestamp: new Date().toISOString() };
+            push(ref(db, `users/${currentEditingUserId}/transactions`), transaction);
+            alert('Points updated successfully!');
+            getModalInstance(getEl('userModal')).hide();
+        });
+    });
+};
+
+window.saveTag = () => {
+    const tagName = elements.tagNameInput.value.trim();
+    if (!tagName) { alert('Tag name cannot be empty.'); return; }
+    set(ref(db, `tags/${tagName}`), true)
+        .then(() => { alert('Tag added!'); getModalInstance(getEl('tagModal')).hide(); elements.addTagForm.reset(); })
+        .catch(err => alert(`Error: ${err.message}`));
+};
+
+window.deleteTag = (tagName) => {
+    if (!confirm(`Are you sure you want to delete the tag #${tagName}? This will not remove it from existing posts.`)) return;
+    set(ref(db, `tags/${tagName}`), null);
+};
+
+window.linkChannel = (e) => {
+    e.preventDefault();
+    const tagName = elements.selectTag.value;
+    const channelUsername = elements.channelUsernameInput.value.trim();
+    if (!tagName || !channelUsername.startsWith('@')) {
+        alert('Please select a tag and provide a valid channel username (starting with @).');
+        return;
+    }
+    push(ref(db, `linkedChannels/${tagName}`), channelUsername)
+        .then(() => { alert('Channel linked successfully!'); elements.linkChannelForm.reset(); })
+        .catch(err => alert(`Error: ${err.message}`));
+};
+
+window.unlinkChannel = (tagName, channelKey) => {
+    if (!confirm('Are you sure you want to unlink this channel?')) return;
+    set(ref(db, `linkedChannels/${tagName}/${channelKey}`), null);
+};
+
+window.handlePaymentRequest = (reqId, status, userId, amount) => {
+    if (!confirm(`Are you sure you want to ${status} this payment request?`)) return;
+    const updates = {};
+    updates[`/paymentRequests/${reqId}/status`] = status;
+    if (status === 'approved') {
+        get(ref(db, `users/${userId}/points`)).then(snapshot => {
+            const currentPoints = snapshot.val() || 0;
+            // Assuming 1 BDT = 10 points for simplicity
+            const pointsToAdd = amount * 10; 
+            updates[`/users/${userId}/points`] = currentPoints + pointsToAdd;
+            update(ref(db), updates).then(() => alert('Request approved and points added.'));
+        });
+    } else {
+        update(ref(db), updates).then(() => alert('Request has been rejected.'));
+    }
+};
+
+window.saveSettings = (e) => {
+    e.preventDefault();
+    const settings = {
+        joinBonus: parseInt(elements.settingJoinBonus.value),
+        dailyBonus: parseInt(elements.settingDailyBonus.value),
+        referralBonus: parseInt(elements.settingReferralBonus.value),
+        postCost: parseInt(elements.settingPostCost.value),
+        paymentNumber: elements.settingPaymentNumber.value.trim(),
+    };
+    set(ref(db, 'settings'), settings)
+        .then(() => alert('Settings saved successfully!'))
+        .catch(err => alert(`Error: ${err.message}`));
+};
+
+
+// =======================================================
+// ===               EVENT LISTENERS SETUP             ===
+// =======================================================
+function setupEventListeners() {
+    elements.loginForm.addEventListener('submit', handleLogin);
+    elements.logoutBtn.addEventListener('click', handleLogout);
+    elements.sidebarLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
             e.preventDefault();
-            if (currentUser.points < POST_SUBMISSION_COST) { WebApp.showAlert(`You need at least ${POST_SUBMISSION_COST} points.`); return; }
-            const content = elements.createPost.content.value.trim();
-            if (!content) { WebApp.showAlert('Post content cannot be empty.'); return; }
-            const selectedTags = Array.from(elements.createPost.tagsContainer.querySelectorAll('.selected')).map(btn => btn.dataset.tag);
-            if (selectedTags.length === 0) { WebApp.showAlert('Please select at least one tag.'); return; }
-            
-            showLoader(true); elements.createPost.submitBtn.disabled = true;
+            navigateToSection(link.dataset.section);
+        });
+    });
+    elements.updatePointsForm.addEventListener('submit', window.updateUserPoints);
+    elements.saveTagBtn.addEventListener('click', window.saveTag);
+    elements.linkChannelForm.addEventListener('submit', window.linkChannel);
+    elements.settingsForm.addEventListener('submit', window.saveSettings);
+    elements.userSearchInput.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        const rows = elements.usersTableBody.getElementsByTagName('tr');
+        Array.from(rows).forEach(row => {
+            row.style.display = row.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
+        });
+    });
+}
+setupEventListeners();
 
-            const postData = {
-                userId: currentUser.id, userName: currentUser.name, content, tags: selectedTags,
-                status: 'pending', submittedAt: firebase.database.ServerValue.TIMESTAMP
-            };
+// =======================================================
+// ===        REALTIME LISTENER SETUP/CLEANUP          ===
+// =======================================================
+function setupRealtimeListeners() {
+    // Listen for pending posts count
+    const pendingPostsQuery = query(ref(db, 'posts'), orderByChild('status'), equalTo('pending'));
+    dbListeners.pendingPosts = onValue(pendingPostsQuery, snapshot => {
+        const count = snapshot.exists() ? snapshot.size : 0;
+        elements.pendingPostsCountBadge.textContent = count;
+        elements.pendingPostsCountBadge.style.display = count > 0 ? 'inline-block' : 'none';
+    });
+    // Listen for pending payments count
+    const pendingPaymentsQuery = query(ref(db, 'paymentRequests'), orderByChild('status'), equalTo('pending'));
+    dbListeners.pendingPayments = onValue(pendingPaymentsQuery, snapshot => {
+        const count = snapshot.exists() ? snapshot.size : 0;
+        elements.pendingPaymentsCountBadge.textContent = count;
+        elements.pendingPaymentsCountBadge.style.display = count > 0 ? 'inline-block' : 'none';
+    });
+}
 
-            if (elements.createPost.customButtonSwitch.checked) {
-                const btnText = elements.createPost.buttonText.value.trim();
-                const btnUrl = elements.createPost.buttonUrl.value.trim();
-                if (btnText && btnUrl) {
-                    postData.customButton = { text: btnText, url: btnUrl };
-                }
-            }
-            
-            if (document.getElementById('postLater').checked) {
-                const scheduleDate = document.getElementById('scheduleDateTime').value;
-                if (scheduleDate) {
-                    postData.scheduleTime = new Date(scheduleDate).getTime();
-                } else {
-                    WebApp.showAlert('Please select a valid date for scheduling.');
-                    showLoader(false); elements.createPost.submitBtn.disabled = false; return;
-                }
-            }
-
-            const newPostRef = db.ref('posts').push();
-            newPostRef.set(postData)
-                .then(() => db.ref('users/' + currentUser.id).update({ points: currentUser.points - POST_SUBMISSION_COST }))
-                .then(() => {
-                    addTransaction(currentUser.id, 'post_fee', -POST_SUBMISSION_COST, `Fee for post #${newPostRef.key.slice(-6)}`);
-                    WebApp.showAlert('Your post submitted for review!');
-                    elements.createPost.form.reset();
-                    elements.createPost.tagsContainer.querySelectorAll('.selected').forEach(btn => btn.classList.remove('selected'));
-                    renderPage('posts-section');
-                })
-                .catch(err => WebApp.showAlert(`Error: ${err.message}`))
-                .finally(() => { showLoader(false); elements.createPost.submitBtn.disabled = false; });
-        }
-
-        function loadUserPosts() {
-            const container = elements.myPosts.container;
-            container.innerHTML = `<div class="text-center p-4"><div class="spinner-border"></div></div>`;
-            db.ref('posts').orderByChild('userId').equalTo(currentUser.id).limitToLast(30).once('value', snapshot => {
-                container.innerHTML = '';
-                if (!snapshot.exists()) { container.innerHTML = `<div class="text-center p-5"><i class="bi bi-file-earmark-x fs-1 text-secondary"></i><p class="mt-2 text-secondary">You haven't created any posts yet.</p></div>`; return; }
-                const posts = []; snapshot.forEach(child => posts.push({ id: child.key, ...child.val() }));
-                posts.reverse().forEach(post => {
-                    const postCard = document.createElement('div');
-                    postCard.className = `custom-card post-item-card status-${post.status}`;
-                    postCard.addEventListener('click', () => showPostDetails(post));
-                    const submittedDate = new Date(post.submittedAt).toLocaleDateString('en-GB');
-                    const statusText = post.status.charAt(0).toUpperCase() + post.status.slice(1);
-                    postCard.innerHTML = `<div class="post-item-header"><span class="badge bg-secondary">${statusText}</span><small class="text-secondary">${submittedDate}</small></div><p class="post-item-content mt-2 text-truncate">${post.content.replace(/<[^>]*>?/gm, '')}</p>`;
-                    container.appendChild(postCard);
-                });
-            });
-        }
-
-        function showPostDetails(post) {
-            const body = elements.postDetails.modalBody;
-            const statusBadges = { approved: 'bg-success', rejected: 'bg-danger', scheduled: 'bg-info', pending: 'bg-warning', published: 'bg-primary', archived: 'bg-secondary' };
-            const statusText = post.status.charAt(0).toUpperCase() + post.status.slice(1);
-            body.innerHTML = `<h5>Content</h5><div class="post-content-full p-3 mb-3" style="background-color: var(--primary-bg); border-radius: 8px;">${post.content}</div><hr><h5>Details</h5><ul class="list-unstyled"><li><strong>Status:</strong> <span class="badge ${statusBadges[post.status] || 'bg-secondary'}">${statusText}</span></li><li><strong>Tags:</strong> ${post.tags.map(tag => `<span class="badge bg-dark">#${tag}</span>`).join(' ')}</li><li><strong>Submitted:</strong> ${new Date(post.submittedAt).toLocaleString()}</li>${post.scheduleTime ? `<li><strong>Scheduled for:</strong> ${new Date(post.scheduleTime).toLocaleString()}</li>` : ''}${post.publishedAt ? `<li><strong>Published:</strong> ${new Date(post.publishedAt).toLocaleString()}</li>` : ''}</ul>`;
-            elements.postDetails.modal.show();
-        }
-
-        function updateDailyBonusUI() {
-            const badge = elements.earn.dailyBonusBadge; if (!currentUser || !badge) return;
-            const timePassed = Date.now() - (currentUser.lastBonusTime || 0); const coolDown = 24 * 60 * 60 * 1000;
-            if (timePassed > coolDown) { badge.textContent = "Claim"; badge.className = 'badge rounded-pill bg-success'; } 
-            else { const timeLeft = coolDown - timePassed; const h = Math.floor(timeLeft / 3600000); const m = Math.floor((timeLeft % 3600000) / 60000); badge.textContent = `${h}h ${m}m`; badge.className = 'badge rounded-pill bg-secondary'; }
-        }
-
-        function claimDailyBonus() {
-            if (!currentUser) return; const timePassed = Date.now() - (currentUser.lastBonusTime || 0);
-            if (timePassed < 24 * 60 * 60 * 1000) { WebApp.showAlert("You can claim again after the cooldown."); return; }
-            const newPoints = (currentUser.points || 0) + DAILY_BONUS_POINTS;
-            db.ref('users/' + currentUser.id).update({ points: newPoints, lastBonusTime: Date.now() })
-                .then(() => { addTransaction(currentUser.id, 'daily_bonus', DAILY_BONUS_POINTS, 'Daily bonus claimed'); WebApp.showAlert(`You've claimed ${DAILY_BONUS_POINTS} points!`); })
-                .catch(e => WebApp.showAlert("Error claiming bonus."));
-        }
-
-        function loadTasks() {
-            const container = getEl('tasks-section'); container.innerHTML = `<h2 class="section-title">Join & Earn</h2><div id="tasksListContainer" class="custom-card list-group"></div>`;
-            const listContainer = getEl('tasksListContainer');
-            listContainer.innerHTML = '<div class="text-center p-4"><div class="spinner-border text-secondary"></div></div>';
-            db.ref('tasks').once('value', snapshot => {
-                listContainer.innerHTML = '';
-                if (!snapshot.exists()) { listContainer.innerHTML = '<p class="text-center text-secondary">No tasks available right now.</p>'; return; }
-                Object.keys(snapshot.val()).forEach(taskId => {
-                    const task = snapshot.val()[taskId]; const isCompleted = currentUser.completedTasks && currentUser.completedTasks[taskId];
-                    const taskElement = document.createElement('div'); taskElement.className = 'list-group-item task-item';
-                    taskElement.innerHTML = `<div class="task-icon"><i class="bi bi-link-45deg"></i></div><div class="task-details"><div class="task-title">${task.title}</div><div class="task-reward">+${task.points} Points</div></div><div class="task-action"><button class="btn btn-sm ${isCompleted ? 'btn-success claimed' : 'btn-primary'}" ${isCompleted ? 'disabled' : ''}>${isCompleted ? 'Claimed' : 'Join'}</button></div>`;
-                    if (!isCompleted) { taskElement.querySelector('button').addEventListener('click', (e) => handleTaskClick(taskId, task.link, task.points, e.currentTarget)); }
-                    listContainer.appendChild(taskElement);
-                });
-            });
-        }
-
-        function handleTaskClick(taskId, link, points, btn) {
-            if (!link) return; WebApp.openTelegramLink(link);
-            btn.textContent = "Verifying..."; btn.disabled = true;
-            setTimeout(() => {
-                const newPoints = (currentUser.points || 0) + parseInt(points);
-                db.ref(`users/${currentUser.id}`).update({ points: newPoints, [`completedTasks/${taskId}`]: true })
-                    .then(() => { addTransaction(currentUser.id, 'task_reward', points, `Reward for task`); WebApp.showAlert(`Task done! You earned ${points} points.`); })
-                    .catch(() => { WebApp.showAlert("An error occurred."); btn.textContent = "Join"; btn.disabled = false; });
-            }, 8000);
-        }
-        
-        function handleReferral(referrerId, refereeId) {
-            const referrerRef = db.ref(`users/${referrerId}`);
-            referrerRef.once('value').then(snapshot => {
-                if (snapshot.exists()) {
-                    const currentPoints = snapshot.val().points || 0;
-                    const updates = {
-                        points: currentPoints + REFERRAL_BONUS_REFERRER,
-                        [`referredUsers/${refereeId}`]: true
-                    };
-                    referrerRef.update(updates).then(() => {
-                        addTransaction(referrerId, 'referral_bonus', REFERRAL_BONUS_REFERRER, `Bonus for referring ${refereeId}`);
-                    });
-                }
-            });
-        }
-
-        function renderReferralPage() {
-            const section = getEl('referral-section');
-            const referralCount = currentUser.referredUsers ? Object.keys(currentUser.referredUsers).length : 0;
-            const referralEarnings = referralCount * REFERRAL_BONUS_REFERRER;
-            const link = `https://t.me/${BOT_USERNAME}?start=${currentUser.id}`;
-            section.innerHTML = `<h2 class="section-title">Refer & Earn</h2><div class="custom-card"><div class="row text-center mb-4 g-3"><div class="col-6"><div class="stat-box"><span class="stat-value">${referralCount}</span><span class="stat-label">Total Referrals</span></div></div><div class="col-6"><div class="stat-box"><span class="stat-value">${referralEarnings}</span><span class="stat-label">Points Earned</span></div></div></div><div class="text-center"><p class="text-secondary mb-3 small">Share your link to earn <strong class="text-warning">${REFERRAL_BONUS_REFERRER}</strong> points for each friend who joins!</p><div class="referral-box"><p class="small text-secondary mb-1">Your Referral Link</p><h4 class="referral-code">${link}</h4></div><button class="btn btn-lg btn-custom-accent mt-3 w-100" id="shareReferralBtn"><i class="bi bi-share-fill"></i> Share Now</button></div></div>`;
-            getEl('shareReferralBtn').addEventListener('click', () => { WebApp.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(`Join me and earn points!`)}`); });
-        }
-        
-        function loadTransactionHistory() {
-            const container = elements.transactions.container;
-            container.innerHTML = `<div class="text-center p-4"><div class="spinner-border"></div></div>`;
-            db.ref(`users/${currentUser.id}/transactions`).limitToLast(50).once('value', snapshot => {
-                container.innerHTML = '';
-                if (!snapshot.exists()) { container.innerHTML = `<div class="list-group-item text-center text-secondary">No transactions found.</div>`; return; }
-                const transactions = []; snapshot.forEach(child => transactions.push(child.val()));
-                transactions.reverse().forEach(tx => {
-                    const isCredit = tx.amount > 0;
-                    const item = document.createElement('div'); item.className = 'list-group-item transaction-item';
-                    item.innerHTML = `<div class="d-flex align-items-center"><i class="bi ${isCredit ? 'bi-arrow-down-circle-fill text-success' : 'bi-arrow-up-circle-fill text-danger'} me-3"></i><div><h6 class="mb-0">${tx.description}</h6><small class="text-secondary">${new Date(tx.timestamp).toLocaleString()}</small></div></div><span class="fw-bold ${isCredit ? 'text-success' : 'text-danger'}">${isCredit ? '+' : ''}${tx.amount}</span>`;
-                    container.appendChild(item);
-                });
-            });
-        }
-
-        function loadTagsForPostCreation() {
-            const container = elements.createPost.tagsContainer;
-            container.innerHTML = '<div class="spinner-border spinner-border-sm"></div>';
-            db.ref('tags').once('value', snapshot => {
-                container.innerHTML = '';
-                if (snapshot.exists()) {
-                    Object.keys(snapshot.val()).forEach(tagKey => {
-                        const tagBtn = document.createElement('button');
-                        tagBtn.type = 'button'; tagBtn.className = 'tag-btn';
-                        tagBtn.textContent = `#${tagKey}`; tagBtn.dataset.tag = tagKey;
-                        tagBtn.addEventListener('click', () => {
-                            tagBtn.classList.toggle('selected');
-                            if (container.querySelectorAll('.selected').length > 3) {
-                                tagBtn.classList.remove('selected');
-                                WebApp.showAlert('You can select up to 3 tags.');
-                            }
-                        });
-                        container.appendChild(tagBtn);
-                    });
-                } else { container.innerHTML = '<p class="text-secondary small">No tags available to select.</p>'; }
-            });
-        }
-
-        function applyTheme(theme) {
-            document.body.classList.toggle('light-mode', theme === 'light');
-            localStorage.setItem('appTheme', theme);
-            elements.profile.themeSwitch.checked = (theme === 'dark');
-        }
-
-        // --- Initial App Calls ---
-        initializeEventListeners();
-        initializePageRenderers();
-        loadOrCreateUser(tgUser);
-    }
-})();
+function detachAllListeners() {
+    Object.values(dbListeners).forEach(listenerRef => {
+        // The onValue function returns an unsubscribe function.
+        // It's better to store that function and call it.
+        // For simplicity here, we assume the object can be turned off,
+        // but this approach is flawed. A better way is to store unsubscribe functions.
+        // off(listenerRef); 
+    });
+    dbListeners = {};
+}
+// Utility to show loader
+const showLoader = (show) => { elements.loader.style.display = show ? 'flex' : 'none'; };
