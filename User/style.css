@@ -110,7 +110,6 @@ body.light-mode .btn-close { filter: none; }
 .list-group-item:hover { background-color: rgba(255, 255, 255, 0.05) !important; }
 .list-group-item i:first-child { color: var(--accent-color); margin-right: 15px; font-size: 1.2rem; width: 20px; }
 .list-group-item .bi-chevron-right { color: var(--text-secondary); }
-.list-group-item.text-danger i:first-child { color: var(--danger-color); }
 
 /* =======================================================
 // ===         SECTION-SPECIFIC STYLES               ===
@@ -155,53 +154,3 @@ body.light-mode .btn-close { filter: none; }
 
 /* Post Details Modal */
 #postDetailsModalBody .post-content-full { white-space: pre-wrap; word-break: break-word; }
-
-/* =======================================================
-// ===               AUTH PAGE STYLES                ===
-// ======================================================= */
-.auth-page-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    padding: 20px;
-    background-color: var(--primary-bg);
-    padding-top: 0; /* Remove padding from body for auth screens */
-    padding-bottom: 0;
-}
-
-.login-card {
-    background-color: var(--card-bg);
-    padding: 2.5rem;
-    border-radius: 12px;
-    border: 1px solid var(--border-color);
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    width: 100%;
-    max-width: 420px;
-}
-
-.btn-light {
-    background-color: #F8F9FA;
-    border-color: #F8F9FA;
-    color: #212529;
-}
-
-body.light-mode .btn-light {
-    background-color: #e2e6ea;
-    border-color: #dae0e5;
-}
-
-.btn-light i.bi-google {
-    color: #DB4437;
-    margin-right: 0.5rem;
-}
-
-.auth-switch-link {
-    color: var(--accent-color);
-    text-decoration: none;
-    font-size: 0.9rem;
-}
-
-.auth-switch-link:hover {
-    text-decoration: underline;
-}
