@@ -2,15 +2,17 @@ document.addEventListener('DOMContentLoaded', () => {
     // =======================================================
     // ===          1. FIREBASE INITIALIZATION           ===
     // =======================================================
-    const firebaseConfig = {
-    apiKey: "AIzaSyAe3TMK4RHmReffbhxZeYi5NuHgmJJWlTo",
-    authDomain: "supchat-5474d.firebaseapp.com",
-    databaseURL: "https://supchat-5474d-default-rtdb.firebaseio.com",
-    projectId: "supchat-5474d",
-    storageBucket: "supchat-5474d.appspot.com",
-    messagingSenderId: "170794585438",
-    appId: "1:170794585438:web:da9cb1f6d7cc3408b493cf"
-    };
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAe3TMK4RHmReffbhxZeYi5NuHgmJJWlTo",
+  authDomain: "supchat-5474d.firebaseapp.com",
+  databaseURL: "https://supchat-5474d-default-rtdb.firebaseio.com",
+  projectId: "supchat-5474d",
+  storageBucket: "supchat-5474d.appspot.com",
+  messagingSenderId: "170794585438",
+  appId: "1:170794585438:web:da9cb1f6d7cc3408b493cf",
+  measurementId: "G-NEWFJBQSB9"
+};
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.database();
