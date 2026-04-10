@@ -1,552 +1,633 @@
 // =======================================================
-// ===               FIREBASE & CONFIG                 ===
+// ===           MODULE IMPORTS & SETUP              ===
 // =======================================================
-// Firebase Imports (using ES6 Modules)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getDatabase, ref, get, set, update, push, onValue, off, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js";
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 
-const firebaseConfig = {
-    apiKey: "AIzaSyAe3TMK4RHmReffbhxZeYi5NuHgmJJWlTo",
-    authDomain: "supchat-5474d.firebaseapp.com",
-    databaseURL: "https://supchat-5474d-default-rtdb.firebaseio.com",
-    projectId: "supchat-5474d",
-    storageBucket: "supchat-5474d.appspot.com",
-    messagingSenderId: "170794585438",
-    appId: "1:170794585438:web:da9cb1f6d7cc3408b493cf"
-};
+// index.html থেকে এক্সপোর্ট করা auth এবং db ইম্পোর্ট করুন
+import { auth, db } from './index.html';
 
-// Initialize Firebase
-let app, db, auth;
-try {
-    app = initializeApp(firebaseConfig);
-    db = getDatabase(app);
-    auth = getAuth(app);
-} catch (e) {
-    console.error("Firebase initialization failed:", e);
-    document.body.innerHTML = `<div class="alert alert-danger m-5"><strong>Critical Error:</strong> Could not connect to Firebase. Check config and console.</div>`;
-}
+// Firebase Auth এবং Database থেকে প্রয়োজনীয় ফাংশন ইম্পোর্ট করুন
+import { 
+    onAuthStateChanged, 
+    signInWithEmailAndPassword, 
+    signOut 
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import { 
+    ref, 
+    onValue, 
+    get, 
+    set, 
+    update, 
+    remove, 
+    push 
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // =======================================================
-// ===                  DOM ELEMENTS                     ===
+// ===           DOM ELEMENT SELECTION               ===
 // =======================================================
-const getEl = (id) => document.getElementById(id);
-const elements = {
-    // Loaders & Containers
-    loader: getEl('adminLoader'),
-    authContainer: getEl('authContainer'),
-    loginSection: getEl('adminLoginSection'),
-    mainArea: getEl('adminMainArea'),
-    
-    // Auth
-    loginForm: getEl('adminLoginForm'),
-    adminEmailInput: getEl('adminEmail'),
-    adminPasswordInput: getEl('adminPassword'),
-    loginStatus: getEl('adminLoginStatus'),
-    logoutBtn: getEl('adminLogoutBtn'),
-    adminUserEmail: getEl('adminUserEmail'),
 
-    // Navigation
-    sidebarLinks: document.querySelectorAll('#adminSidebar .nav-link'),
-    pageTitle: getEl('adminPageTitle'),
-    sections: document.querySelectorAll('#adminMainContent .section'),
+// Global & Auth
+const adminLoader = document.getElementById('adminLoader');
+const authContainer = document.getElementById('authContainer');
+const adminMainArea = document.getElementById('adminMainArea');
+const adminLoginForm = document.getElementById('adminLoginForm');
+const adminEmailInput = document.getElementById('adminEmail');
+const adminPasswordInput = document.getElementById('adminPassword');
+const adminLoginStatus = document.getElementById('adminLoginStatus');
 
-    // Dashboard Stats
-    statTotalUsers: getEl('statTotalUsers'),
-    statTotalPosts: getEl('statTotalPosts'),
-    statPendingPosts: getEl('statPendingPosts'),
-    statPendingPayments: getEl('statPendingPayments'),
-    pendingPostsCountBadge: getEl('pendingPostsCountBadge'),
-    pendingPaymentsCountBadge: getEl('pendingPaymentsCountBadge'),
+// Header & Sidebar
+const adminUserEmail = document.getElementById('adminUserEmail');
+const adminLogoutBtn = document.getElementById('adminLogoutBtn');
+const adminSidebar = document.getElementById('adminSidebar');
+const adminPageTitle = document.getElementById('adminPageTitle');
+const pendingPostsCountBadge = document.getElementById('pendingPostsCountBadge');
+const pendingPaymentsCountBadge = document.getElementById('pendingPaymentsCountBadge');
 
-    // Post Management
-    pendingPostsTableBody: getEl('pendingPostsTableBody'),
-    postContentModalBody: getEl('postContentModalBody'),
-    
-    // User Management
-    usersTableBody: getEl('usersTableBody'),
-    userSearchInput: getEl('userSearchInput'),
-    userModalTitle: getEl('userModalTitle'),
-    userDetailId: getEl('userDetailId'),
-    userDetailName: getEl('userDetailName'),
-    userDetailPoints: getEl('userDetailPoints'),
-    updatePointsForm: getEl('updatePointsForm'),
-    pointsUpdateAmount: getEl('pointsUpdateAmount'),
-    pointsUpdateReason: getEl('pointsUpdateReason'),
+// Sections
+const adminSections = document.querySelectorAll('.admin-section');
+const adminMainContent = document.getElementById('adminMainContent');
 
-    // Tags & Channels
-    tagsList: getEl('tagsList'),
-    addTagForm: getEl('addTagForm'),
-    tagNameInput: getEl('tagName'),
-    saveTagBtn: getEl('saveTagBtn'),
-    linkChannelForm: getEl('linkChannelForm'),
-    selectTag: getEl('selectTag'),
-    channelUsernameInput: getEl('channelUsername'),
-    linkedChannelsContainer: getEl('linkedChannelsContainer'),
+// Dashboard Stats
+const statTotalUsers = document.getElementById('statTotalUsers');
+const statTotalPosts = document.getElementById('statTotalPosts');
+const statPendingPosts = document.getElementById('statPendingPosts');
+const statPendingPayments = document.getElementById('statPendingPayments');
 
-    // Payments
-    paymentRequestsTableBody: getEl('paymentRequestsTableBody'),
-
-    // Settings
-    settingsForm: getEl('settingsForm'),
-    settingJoinBonus: getEl('settingJoinBonus'),
-    settingDailyBonus: getEl('settingDailyBonus'),
-    settingReferralBonus: getEl('settingReferralBonus'),
-    settingPostCost: getEl('settingPostCost'),
-    settingPaymentNumber: getEl('settingPaymentNumber'),
-};
-
-// Bootstrap Instances Cache
-let componentInstances = {};
-const getModalInstance = (element) => {
-    if (!element) return null;
-    if (!componentInstances[element.id]) {
-        componentInstances[element.id] = new bootstrap.Modal(element);
-    }
-    return componentInstances[element.id];
-};
-
-// =======================================================
-// ===                 APP STATE & LOGIC               ===
-// =======================================================
-let currentAdminUser = null;
-let currentEditingUserId = null;
-let dbListeners = {}; // To keep track of active listeners
-
-// --- Main Auth Flow ---
-onAuthStateChanged(auth, (user) => {
-    showLoader(true);
-    if (user) {
-        currentAdminUser = user;
-        elements.adminUserEmail.textContent = user.email;
-        elements.authContainer.style.display = 'none';
-        elements.mainArea.style.display = 'block';
-        navigateToSection('dashboard-section');
-        setupRealtimeListeners();
-    } else {
-        currentAdminUser = null;
-        elements.mainArea.style.display = 'none';
-        elements.authContainer.style.display = 'block';
-        elements.loginSection.style.display = 'block';
-        detachAllListeners();
-    }
-    showLoader(false);
-});
-
-function handleLogin(e) {
-    e.preventDefault();
-    showLoader(true);
-    const email = elements.adminEmailInput.value;
-    const password = elements.adminPasswordInput.value;
-    signInWithEmailAndPassword(auth, email, password)
-        .catch(error => {
-            elements.loginStatus.textContent = `Login Failed: ${error.message}`;
-            elements.loginStatus.className = 'alert alert-danger';
-            elements.loginStatus.style.display = 'block';
-        })
-        .finally(() => showLoader(false));
-}
-
-function handleLogout() {
-    signOut(auth);
-}
-
-// --- Navigation ---
-function navigateToSection(sectionId) {
-    elements.sections.forEach(sec => sec.classList.remove('active'));
-    getEl(sectionId)?.classList.add('active');
-
-    elements.sidebarLinks.forEach(link => {
-        link.classList.toggle('active', link.dataset.section === sectionId);
-    });
-    
-    const activeLink = document.querySelector(`.nav-link[data-section="${sectionId}"]`);
-    elements.pageTitle.textContent = activeLink ? activeLink.textContent.trim() : 'Dashboard';
-
-    // Load data for the activated section
-    loadDataForSection(sectionId);
-    const offcanvas = bootstrap.Offcanvas.getInstance(getEl('adminSidebar'));
-    if(offcanvas) offcanvas.hide();
-}
-
-// --- Data Loading ---
-function loadDataForSection(sectionId) {
-    switch(sectionId) {
-        case 'dashboard-section':
-            loadDashboardStats();
-            break;
-        case 'posts-section':
-            loadPendingPosts();
-            break;
-        case 'users-section':
-            loadUsers();
-            break;
-        case 'tags-channels-section':
-            loadTags();
-            loadLinkedChannels();
-            break;
-        case 'payments-section':
-            loadPaymentRequests();
-            break;
-        case 'settings-section':
-            loadSettings();
-            break;
-    }
-}
-
-// Dashboard
-async function loadDashboardStats() {
-    const usersRef = ref(db, 'users');
-    const postsRef = ref(db, 'posts');
-    const paymentsRef = query(ref(db, 'paymentRequests'), orderByChild('status'), equalTo('pending'));
-    
-    const [usersSnap, postsSnap, paymentsSnap] = await Promise.all([
-        get(usersRef), get(postsRef), get(paymentsRef)
-    ]);
-    
-    elements.statTotalUsers.textContent = usersSnap.exists() ? usersSnap.size : 0;
-    
-    let totalPosts = 0;
-    let pendingPosts = 0;
-    if (postsSnap.exists()) {
-        totalPosts = postsSnap.size;
-        postsSnap.forEach(child => {
-            if (child.val().status === 'pending') {
-                pendingPosts++;
-            }
-        });
-    }
-    elements.statTotalPosts.textContent = totalPosts;
-    elements.statPendingPosts.textContent = pendingPosts;
-    elements.pendingPostsCountBadge.textContent = pendingPosts;
-    elements.pendingPostsCountBadge.style.display = pendingPosts > 0 ? 'inline-block' : 'none';
-
-    const pendingPayments = paymentsSnap.exists() ? paymentsSnap.size : 0;
-    elements.statPendingPayments.textContent = pendingPayments;
-    elements.pendingPaymentsCountBadge.textContent = pendingPayments;
-    elements.pendingPaymentsCountBadge.style.display = pendingPayments > 0 ? 'inline-block' : 'none';
-}
-
-// Post Management
-function loadPendingPosts() {
-    const postsQuery = query(ref(db, 'posts'), orderByChild('status'), equalTo('pending'));
-    onValue(postsQuery, snapshot => {
-        const tableBody = elements.pendingPostsTableBody;
-        tableBody.innerHTML = '';
-        if (!snapshot.exists()) {
-            tableBody.innerHTML = `<tr><td colspan="4" class="text-center text-secondary">No pending posts.</td></tr>`;
-            return;
-        }
-        snapshot.forEach(childSnapshot => {
-            const post = childSnapshot.val();
-            const postId = childSnapshot.key;
-            const row = tableBody.insertRow();
-            row.innerHTML = `
-                <td>${post.userName || 'Unknown'} <small class="d-block text-secondary">${post.userId}</small></td>
-                <td class="post-content-preview">${post.content}</td>
-                <td>${post.tags.map(tag => `<span class="badge bg-secondary">#${tag}</span>`).join(' ')}</td>
-                <td>
-                    <button class="btn btn-sm btn-info" onclick="window.viewPostContent('${postId}')"><i class="bi bi-eye"></i></button>
-                    <button class="btn btn-sm btn-success" onclick="window.updatePostStatus('${postId}', 'approved')"><i class="bi bi-check-lg"></i></button>
-                    <button class="btn btn-sm btn-danger" onclick="window.updatePostStatus('${postId}', 'rejected')"><i class="bi bi-x-lg"></i></button>
-                </td>
-            `;
-        });
-    });
-}
-
-// User Management
-function loadUsers() {
-    const usersRef = ref(db, 'users');
-    onValue(usersRef, snapshot => {
-        const tableBody = elements.usersTableBody;
-        tableBody.innerHTML = '';
-        if (!snapshot.exists()) {
-            tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary">No users found.</td></tr>`;
-            return;
-        }
-        snapshot.forEach(childSnapshot => {
-            const user = childSnapshot.val();
-            const userId = childSnapshot.key;
-            const row = tableBody.insertRow();
-            row.innerHTML = `
-                <td>${userId}</td>
-                <td>${user.name || 'N/A'}</td>
-                <td>${user.points || 0}</td>
-                <td>${new Date(user.joinDate).toLocaleDateString()}</td>
-                <td><button class="btn btn-sm btn-primary" onclick="window.openUserModal('${userId}')">Details</button></td>
-            `;
-        });
-    });
-}
+// Tables
+const pendingPostsTableBody = document.getElementById('pendingPostsTableBody');
+const usersTableBody = document.getElementById('usersTableBody');
+const paymentRequestsTableBody = document.getElementById('paymentRequestsTableBody');
 
 // Tags & Channels
-function loadTags() {
-    onValue(ref(db, 'tags'), snapshot => {
-        elements.tagsList.innerHTML = '';
-        elements.selectTag.innerHTML = '<option value="">Select a tag</option>';
-        if (!snapshot.exists()) {
-            elements.tagsList.innerHTML = '<li class="list-group-item text-secondary">No tags created.</li>';
-            return;
-        }
-        snapshot.forEach(child => {
-            const tagName = child.key;
-            const li = document.createElement('li');
-            li.className = 'list-group-item d-flex justify-content-between align-items-center';
-            li.innerHTML = `<span>#${tagName}</span><button class="btn btn-sm btn-outline-danger" onclick="window.deleteTag('${tagName}')"><i class="bi bi-trash"></i></button>`;
-            elements.tagsList.appendChild(li);
-            elements.selectTag.innerHTML += `<option value="${tagName}">${tagName}</option>`;
-        });
-    });
-}
-
-function loadLinkedChannels() {
-     onValue(ref(db, 'linkedChannels'), snapshot => {
-        elements.linkedChannelsContainer.innerHTML = '';
-        if (!snapshot.exists()) return;
-        snapshot.forEach(tagSnap => {
-            const tagName = tagSnap.key;
-            const channels = tagSnap.val();
-            let channelHtml = `<h6>#${tagName}</h6>`;
-            Object.entries(channels).forEach(([channelKey, channelUsername]) => {
-                channelHtml += `<div class="d-flex justify-content-between align-items-center mb-1">
-                    <span class="badge bg-info">${channelUsername}</span>
-                    <button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="window.unlinkChannel('${tagName}', '${channelKey}')">×</button>
-                </div>`;
-            });
-            elements.linkedChannelsContainer.innerHTML += channelHtml;
-        });
-     });
-}
-
-// Payments
-function loadPaymentRequests() {
-    const paymentsQuery = query(ref(db, 'paymentRequests'), orderByChild('status'), equalTo('pending'));
-    onValue(paymentsQuery, snapshot => {
-        const tableBody = elements.paymentRequestsTableBody;
-        tableBody.innerHTML = '';
-        if (!snapshot.exists()) {
-            tableBody.innerHTML = `<tr><td colspan="5" class="text-center text-secondary">No pending payment requests.</td></tr>`;
-            return;
-        }
-        snapshot.forEach(child => {
-            const req = child.val();
-            const reqId = child.key;
-            const row = tableBody.insertRow();
-            row.innerHTML = `
-                <td>${req.userName || 'N/A'} <small class="d-block text-secondary">${req.userId}</small></td>
-                <td>${req.amount} BDT</td>
-                <td>${req.trxId}</td>
-                <td>${new Date(req.timestamp).toLocaleString()}</td>
-                <td>
-                    <button class="btn btn-sm btn-success" onclick="window.handlePaymentRequest('${reqId}', 'approved', ${req.userId}, ${req.amount})">Approve</button>
-                    <button class="btn btn-sm btn-danger" onclick="window.handlePaymentRequest('${reqId}', 'rejected')">Reject</button>
-                </td>
-            `;
-        });
-    });
-}
+const tagsList = document.getElementById('tagsList');
+const addTagForm = document.getElementById('addTagForm');
+const saveTagBtn = document.getElementById('saveTagBtn');
+const linkChannelForm = document.getElementById('linkChannelForm');
+const selectTagForChannel = document.getElementById('selectTag');
+const linkedChannelsContainer = document.getElementById('linkedChannelsContainer');
 
 // Settings
-function loadSettings() {
-    get(ref(db, 'settings')).then(snapshot => {
-        if (snapshot.exists()) {
-            const settings = snapshot.val();
-            Object.keys(elements).forEach(key => {
-                if (key.startsWith('setting')) {
-                    const settingKey = key.replace('setting', '').charAt(0).toLowerCase() + key.slice(8);
-                    if (elements[key] && settings[settingKey] !== undefined) {
-                        elements[key].value = settings[settingKey];
-                    }
+const settingsForm = document.getElementById('settingsForm');
+
+// Modals
+const userModal = new bootstrap.Modal(document.getElementById('userModal'));
+const postContentModal = new bootstrap.Modal(document.getElementById('postContentModal'));
+const rejectPostModal = new bootstrap.Modal(document.getElementById('rejectPostModal'));
+const tagModal = new bootstrap.Modal(document.getElementById('tagModal'));
+
+// State to hold temporary data
+let state = {
+    selectedUserId: null,
+    selectedPostId: null,
+    allUsers: {},
+};
+
+
+// =======================================================
+// ===           HELPER & UI FUNCTIONS               ===
+// =======================================================
+
+const toggleLoader = (show) => {
+    adminLoader.style.display = show ? 'flex' : 'none';
+};
+
+const showAlert = (element, message, type = 'danger') => {
+    element.innerHTML = message;
+    element.className = `alert alert-${type}`;
+    element.style.display = 'block';
+    setTimeout(() => { element.style.display = 'none'; }, 5000);
+};
+
+const showSection = (sectionId) => {
+    adminSections.forEach(section => {
+        section.classList.remove('active');
+    });
+    const activeSection = document.getElementById(sectionId);
+    if (activeSection) {
+        activeSection.classList.add('active');
+        const navLink = document.querySelector(`.nav-link[data-section="${sectionId}"]`);
+        document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('active'));
+        if (navLink) {
+            navLink.classList.add('active');
+            adminPageTitle.textContent = navLink.textContent.replace(/<span.*<\/span>/, '').trim();
+        }
+    }
+};
+
+const formatDate = (timestamp) => {
+    if (!timestamp) return 'N/A';
+    return new Date(timestamp).toLocaleString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+    });
+};
+
+// =======================================================
+// ===           AUTHENTICATION LOGIC                ===
+// =======================================================
+
+const checkIfAdmin = async (uid) => {
+    try {
+        const userRef = ref(db, `users/${uid}/isAdmin`);
+        const snapshot = await get(userRef);
+        return snapshot.exists() && snapshot.val() === true;
+    } catch (error) {
+        console.error("Error checking admin status:", error);
+        return false;
+    }
+};
+
+onAuthStateChanged(auth, async (user) => {
+    toggleLoader(true);
+    if (user) {
+        const isAdmin = await checkIfAdmin(user.uid);
+        if (isAdmin) {
+            adminUserEmail.textContent = user.email;
+            authContainer.style.display = 'none';
+            adminMainArea.style.display = 'block';
+            loadAllAdminData();
+        } else {
+            showAlert(adminLoginStatus, 'You do not have permission to access this panel.', 'danger');
+            await signOut(auth);
+            authContainer.style.display = 'flex';
+            adminMainArea.style.display = 'none';
+        }
+    } else {
+        authContainer.style.display = 'flex';
+        adminMainArea.style.display = 'none';
+    }
+    toggleLoader(false);
+});
+
+const handleLogin = async (e) => {
+    e.preventDefault();
+    toggleLoader(true);
+    const email = adminEmailInput.value;
+    const password = adminPasswordInput.value;
+
+    try {
+        await signInWithEmailAndPassword(auth, email, password);
+        // onAuthStateChanged will handle the rest
+    } catch (error) {
+        showAlert(adminLoginStatus, `Login Failed: ${error.message}`);
+        toggleLoader(false);
+    }
+};
+
+const handleLogout = async () => {
+    await signOut(auth);
+};
+
+
+// =======================================================
+// ===           DATA FETCHING & RENDERING           ===
+// =======================================================
+
+const loadAllAdminData = () => {
+    fetchDashboardStats();
+    fetchPendingPosts();
+    fetchUsers();
+    fetchTagsAndChannels();
+    fetchPaymentRequests();
+    fetchSettings();
+};
+
+// --- Dashboard ---
+const fetchDashboardStats = () => {
+    const usersRef = ref(db, 'users');
+    const postsRef = ref(db, 'posts');
+    const paymentsRef = ref(db, 'paymentRequests');
+
+    get(usersRef).then(snap => { statTotalUsers.textContent = snap.exists() ? Object.keys(snap.val()).length : 0; });
+    get(postsRef).then(snap => {
+        if (snap.exists()) {
+            const posts = Object.values(snap.val());
+            statTotalPosts.textContent = posts.length;
+            const pending = posts.filter(p => p.status === 'pending').length;
+            statPendingPosts.textContent = pending;
+            pendingPostsCountBadge.textContent = pending;
+        }
+    });
+    get(paymentsRef).then(snap => {
+        if (snap.exists()) {
+            const payments = Object.values(snap.val());
+            const pending = payments.filter(p => p.status === 'pending').length;
+            statPendingPayments.textContent = pending;
+            pendingPaymentsCountBadge.textContent = pending;
+        }
+    });
+};
+
+// --- Post Management ---
+const fetchPendingPosts = () => {
+    const postsRef = ref(db, 'posts');
+    onValue(postsRef, (snapshot) => {
+        const posts = snapshot.val();
+        pendingPostsTableBody.innerHTML = '';
+        let pendingCount = 0;
+        if (posts) {
+            for (const postId in posts) {
+                if (posts[postId].status === 'pending') {
+                    pendingCount++;
+                    const post = posts[postId];
+                    const user = state.allUsers[post.userId] || { name: 'Unknown User' };
+                    const row = `
+                        <tr>
+                            <td>${user.name}<br><small class="text-secondary">${post.userId}</small></td>
+                            <td class="post-content-preview">${post.content}</td>
+                            <td>${post.tags.join(', ')}</td>
+                            <td>${formatDate(post.createdAt || post.submittedAt)}</td>
+                            <td>
+                                <button class="btn btn-sm btn-info view-post-btn" data-id="${postId}"><i class="bi bi-eye"></i></button>
+                                <button class="btn btn-sm btn-success approve-post-btn" data-id="${postId}"><i class="bi bi-check-lg"></i></button>
+                                <button class="btn btn-sm btn-danger reject-post-btn" data-id="${postId}"><i class="bi bi-x-lg"></i></button>
+                            </td>
+                        </tr>
+                    `;
+                    pendingPostsTableBody.innerHTML += row;
                 }
+            }
+        }
+        if (pendingCount === 0) {
+            pendingPostsTableBody.innerHTML = '<tr><td colspan="5" class="text-center">No pending posts found.</td></tr>';
+        }
+        statPendingPosts.textContent = pendingCount;
+        pendingPostsCountBadge.textContent = pendingCount;
+    });
+};
+
+// --- User Management ---
+const fetchUsers = () => {
+    const usersRef = ref(db, 'users');
+    onValue(usersRef, (snapshot) => {
+        const users = snapshot.val();
+        state.allUsers = users || {};
+        renderUsers(state.allUsers);
+        statTotalUsers.textContent = users ? Object.keys(users).length : 0;
+        // Re-fetch posts to update user names
+        fetchPendingPosts();
+    });
+};
+
+const renderUsers = (users) => {
+    usersTableBody.innerHTML = '';
+    if (!users || Object.keys(users).length === 0) {
+        usersTableBody.innerHTML = '<tr><td colspan="6" class="text-center">No users found.</td></tr>';
+        return;
+    }
+    for (const userId in users) {
+        const user = users[userId];
+        const row = `
+            <tr class="${user.isSuspended ? 'table-danger' : ''}">
+                <td>
+                    <div class="user-info-cell">
+                         <img src="${user.photoUrl || 'https://ui-avatars.com/api/?name=' + user.name}" class="user-avatar" alt="Avatar">
+                        <div class="user-details">
+                            <span class="user-name">${user.name || 'N/A'}</span>
+                            <span class="user-id">${userId}</span>
+                        </div>
+                    </div>
+                </td>
+                <td>${user.email || 'N/A'}</td>
+                <td>${user.points || 0}</td>
+                <td>
+                    <span class="badge ${user.isSuspended ? 'bg-danger' : 'bg-success'}">
+                        ${user.isSuspended ? 'Suspended' : 'Active'}
+                    </span>
+                    ${user.isAdmin ? '<span class="badge bg-primary ms-1">Admin</span>' : ''}
+                </td>
+                <td>${formatDate(user.joinDate)}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary view-user-btn" data-id="${userId}">Details</button>
+                </td>
+            </tr>
+        `;
+        usersTableBody.innerHTML += row;
+    }
+};
+
+// --- Tags & Channels ---
+const fetchTagsAndChannels = () => {
+    const tagsRef = ref(db, 'tags');
+    const channelsRef = ref(db, 'linkedChannels');
+    
+    onValue(tagsRef, (snapshot) => {
+        const tags = snapshot.val();
+        tagsList.innerHTML = '';
+        selectTagForChannel.innerHTML = '<option selected disabled>Choose a tag...</option>';
+        if (tags) {
+            Object.keys(tags).forEach(tag => {
+                tagsList.innerHTML += `
+                    <li class="list-group-item">
+                        ${tag}
+                        <button class="btn btn-sm btn-outline-danger delete-tag-btn" data-tag="${tag}"><i class="bi bi-trash"></i></button>
+                    </li>
+                `;
+                selectTagForChannel.innerHTML += `<option value="${tag}">${tag}</option>`;
             });
         }
     });
-}
+
+    onValue(channelsRef, (snapshot) => {
+        const channels = snapshot.val();
+        linkedChannelsContainer.innerHTML = '<h6>Currently Linked Channels</h6>';
+        if (channels) {
+            for (const tag in channels) {
+                linkedChannelsContainer.innerHTML += `<div class="mb-2"><strong>${tag}:</strong></div>`;
+                const tagChannels = channels[tag];
+                const channelList = document.createElement('div');
+                channelList.className = 'd-flex flex-wrap gap-2 channel-list';
+                for (const channelId in tagChannels) {
+                    channelList.innerHTML += `
+                        <span class="badge bg-secondary remove-channel-btn" data-tag="${tag}" data-id="${channelId}">
+                            ${tagChannels[channelId]} <i class="bi bi-x-circle remove-channel-icon"></i>
+                        </span>
+                    `;
+                }
+                linkedChannelsContainer.appendChild(channelList);
+            }
+        }
+    });
+};
+
+// --- Payment Requests ---
+const fetchPaymentRequests = () => {
+    // Placeholder - implement similarly to fetchPendingPosts
+    paymentRequestsTableBody.innerHTML = '<tr><td colspan="5" class="text-center">Feature coming soon.</td></tr>';
+};
+
+// --- Settings ---
+const fetchSettings = () => {
+    const settingsRef = ref(db, 'settings');
+    get(settingsRef).then((snapshot) => {
+        if (snapshot.exists()) {
+            const settings = snapshot.val();
+            for (const key in settings) {
+                const input = document.getElementById(`setting${key.charAt(0).toUpperCase() + key.slice(1)}`);
+                if (input) {
+                    input.value = settings[key];
+                }
+            }
+        }
+    });
+};
 
 
 // =======================================================
-// ===               ACTION FUNCTIONS                  ===
+// ===              ACTION HANDLERS                  ===
 // =======================================================
-// These functions are called from inline onclick attributes for simplicity
-window.updatePostStatus = (postId, status) => {
-    if (!confirm(`Are you sure you want to ${status} this post?`)) return;
-    const updates = {};
-    updates[`/posts/${postId}/status`] = status;
-    if (status === 'approved') {
-        updates[`/posts/${postId}/approvedAt`] = new Date().toISOString();
+
+// --- Post Actions ---
+const handleViewPost = async (postId) => {
+    state.selectedPostId = postId;
+    const postRef = ref(db, `posts/${postId}`);
+    const snapshot = await get(postRef);
+    if (snapshot.exists()) {
+        const post = snapshot.val();
+        const user = state.allUsers[post.userId] || {};
+        
+        let contentHTML = `
+            <p><strong>User:</strong> ${user.name || 'Unknown'} (${post.userId})</p>
+            <p><strong>Submitted:</strong> ${formatDate(post.createdAt || post.submittedAt)}</p>
+            <p><strong>Tags:</strong> ${post.tags.join(', ')}</p>
+            ${post.customButton ? `<p><strong>Button:</strong> <a href="${post.customButton.url}" target="_blank">${post.customButton.text}</a></p>` : ''}
+            <hr>
+            <h6>Content:</h6>
+            <div class="post-content-full">${post.content}</div>
+        `;
+        document.getElementById('postContentModalBody').innerHTML = contentHTML;
+
+        let footerHTML = `
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-danger reject-post-btn" data-id="${postId}">Reject</button>
+            <button type="button" class="btn btn-success approve-post-btn" data-id="${postId}">Approve</button>
+        `;
+        document.getElementById('postReviewActionsFooter').innerHTML = footerHTML;
+        postContentModal.show();
     }
-    update(ref(db), updates)
-        .then(() => alert(`Post has been ${status}.`))
-        .catch(err => alert(`Error: ${err.message}`));
-    // In a real app, an 'approved' status would trigger a Cloud Function to broadcast the post.
 };
 
-window.viewPostContent = (postId) => {
-    get(ref(db, `posts/${postId}/content`)).then(snapshot => {
-        if (snapshot.exists()) {
-            elements.postContentModalBody.textContent = snapshot.val();
-            getModalInstance(getEl('postContentModal')).show();
-        } else {
-            alert('Could not retrieve post content.');
-        }
+const handleApprovePost = async (postId) => {
+    const postRef = ref(db, `posts/${postId}`);
+    await update(postRef, {
+        status: 'published',
+        approvedAt: new Date().toISOString()
     });
+    postContentModal.hide();
+    alert('Post approved and published.');
 };
 
-window.openUserModal = (userId) => {
-    currentEditingUserId = userId;
-    get(ref(db, `users/${userId}`)).then(snapshot => {
-        if (snapshot.exists()) {
-            const user = snapshot.val();
-            elements.userModalTitle.textContent = `Details for ${user.name}`;
-            elements.userDetailId.textContent = userId;
-            elements.userDetailName.textContent = user.name;
-            elements.userDetailPoints.textContent = user.points || 0;
-            getModalInstance(getEl('userModal')).show();
-        }
+const handleRejectPost = (postId) => {
+    state.selectedPostId = postId;
+    document.getElementById('rejectionReason').value = '';
+    postContentModal.hide();
+    rejectPostModal.show();
+};
+
+const confirmRejectPost = async () => {
+    const reason = document.getElementById('rejectionReason').value;
+    if (!reason) {
+        alert('Please provide a reason for rejection.');
+        return;
+    }
+    const postRef = ref(db, `posts/${state.selectedPostId}`);
+    await update(postRef, {
+        status: 'rejected',
+        rejectionReason: reason
     });
+    rejectPostModal.hide();
+    alert('Post rejected.');
 };
 
-window.updateUserPoints = (e) => {
+// --- User Actions ---
+const handleViewUser = (userId) => {
+    state.selectedUserId = userId;
+    const user = state.allUsers[userId];
+    const userDetailContent = document.getElementById('userDetailContent');
+    userDetailContent.innerHTML = `
+        <p><strong>Name:</strong> ${user.name}</p>
+        <p><strong>Email:</strong> ${user.email || 'N/A'}</p>
+        <p><strong>Points:</strong> ${user.points}</p>
+        <p><strong>Status:</strong> ${user.isSuspended ? 'Suspended' : 'Active'}</p>
+        <p><strong>Joined:</strong> ${formatDate(user.joinDate)}</p>
+    `;
+    
+    document.getElementById('suspendUserBtn').style.display = user.isSuspended ? 'none' : 'block';
+    document.getElementById('reactivateUserBtn').style.display = user.isSuspended ? 'block' : 'none';
+
+    userModal.show();
+};
+
+const handleSuspendUser = async () => {
+    if (confirm(`Are you sure you want to suspend this user?`)) {
+        await update(ref(db, `users/${state.selectedUserId}`), { isSuspended: true });
+        userModal.hide();
+        alert('User suspended.');
+    }
+};
+
+const handleReactivateUser = async () => {
+    await update(ref(db, `users/${state.selectedUserId}`), { isSuspended: false });
+    userModal.hide();
+    alert('User re-activated.');
+};
+
+const handleUpdatePoints = async (e) => {
     e.preventDefault();
-    const amount = parseInt(elements.pointsUpdateAmount.value);
-    const reason = elements.pointsUpdateReason.value.trim();
+    const amount = parseInt(document.getElementById('pointsUpdateAmount').value);
+    const reason = document.getElementById('pointsUpdateReason').value;
+
     if (isNaN(amount) || !reason) {
-        alert('Please provide a valid amount and a reason.');
+        alert('Please enter a valid amount and reason.');
         return;
     }
-    const userPointsRef = ref(db, `users/${currentEditingUserId}/points`);
-    get(userPointsRef).then(snapshot => {
-        const currentPoints = snapshot.val() || 0;
-        const newPoints = currentPoints + amount;
-        set(userPointsRef, newPoints).then(() => {
-            // Log this transaction
-            const transaction = { type: 'admin_update', amount, description: reason, timestamp: new Date().toISOString() };
-            push(ref(db, `users/${currentEditingUserId}/transactions`), transaction);
-            alert('Points updated successfully!');
-            getModalInstance(getEl('userModal')).hide();
-        });
+
+    const userRef = ref(db, `users/${state.selectedUserId}`);
+    const snapshot = await get(userRef);
+    const user = snapshot.val();
+    const newPoints = (user.points || 0) + amount;
+
+    await update(userRef, { points: newPoints });
+
+    const transactionsRef = ref(db, `users/${state.selectedUserId}/transactions`);
+    await push(transactionsRef, {
+        amount: amount,
+        description: reason,
+        type: 'admin_update',
+        timestamp: Date.now()
     });
+
+    document.getElementById('updatePointsForm').reset();
+    userModal.hide();
+    alert('Points updated successfully.');
 };
 
-window.saveTag = () => {
-    const tagName = elements.tagNameInput.value.trim();
-    if (!tagName) { alert('Tag name cannot be empty.'); return; }
-    set(ref(db, `tags/${tagName}`), true)
-        .then(() => { alert('Tag added!'); getModalInstance(getEl('tagModal')).hide(); elements.addTagForm.reset(); })
-        .catch(err => alert(`Error: ${err.message}`));
+// --- Tag/Channel Actions ---
+const handleSaveTag = async () => {
+    const tagName = document.getElementById('tagName').value.trim();
+    if (tagName) {
+        await set(ref(db, `tags/${tagName}`), true);
+        tagModal.hide();
+        addTagForm.reset();
+        alert('Tag added successfully.');
+    }
 };
 
-window.deleteTag = (tagName) => {
-    if (!confirm(`Are you sure you want to delete the tag #${tagName}? This will not remove it from existing posts.`)) return;
-    set(ref(db, `tags/${tagName}`), null);
+const handleDeleteTag = async (tagName) => {
+    if (confirm(`Are you sure you want to delete the tag "${tagName}"? This will not remove it from existing posts.`)) {
+        await remove(ref(db, `tags/${tagName}`));
+        alert('Tag deleted.');
+    }
 };
 
-window.linkChannel = (e) => {
+const handleLinkChannel = async (e) => {
     e.preventDefault();
-    const tagName = elements.selectTag.value;
-    const channelUsername = elements.channelUsernameInput.value.trim();
-    if (!tagName || !channelUsername.startsWith('@')) {
-        alert('Please select a tag and provide a valid channel username (starting with @).');
-        return;
-    }
-    push(ref(db, `linkedChannels/${tagName}`), channelUsername)
-        .then(() => { alert('Channel linked successfully!'); elements.linkChannelForm.reset(); })
-        .catch(err => alert(`Error: ${err.message}`));
-};
-
-window.unlinkChannel = (tagName, channelKey) => {
-    if (!confirm('Are you sure you want to unlink this channel?')) return;
-    set(ref(db, `linkedChannels/${tagName}/${channelKey}`), null);
-};
-
-window.handlePaymentRequest = (reqId, status, userId, amount) => {
-    if (!confirm(`Are you sure you want to ${status} this payment request?`)) return;
-    const updates = {};
-    updates[`/paymentRequests/${reqId}/status`] = status;
-    if (status === 'approved') {
-        get(ref(db, `users/${userId}/points`)).then(snapshot => {
-            const currentPoints = snapshot.val() || 0;
-            // Assuming 1 BDT = 10 points for simplicity
-            const pointsToAdd = amount * 10; 
-            updates[`/users/${userId}/points`] = currentPoints + pointsToAdd;
-            update(ref(db), updates).then(() => alert('Request approved and points added.'));
-        });
+    const tag = selectTagForChannel.value;
+    const channelUsername = document.getElementById('channelUsername').value.trim();
+    if (tag && channelUsername.startsWith('@')) {
+        const channelRef = ref(db, `linkedChannels/${tag}`);
+        await push(channelRef, channelUsername);
+        linkChannelForm.reset();
+        alert('Channel linked successfully.');
     } else {
-        update(ref(db), updates).then(() => alert('Request has been rejected.'));
+        alert('Please select a tag and provide a valid channel username (starting with @).');
     }
 };
 
-window.saveSettings = (e) => {
+const handleRemoveChannel = async (tag, channelId) => {
+    if (confirm('Are you sure you want to unlink this channel?')) {
+        await remove(ref(db, `linkedChannels/${tag}/${channelId}`));
+        alert('Channel unlinked.');
+    }
+};
+
+
+// --- Settings Actions ---
+const handleSaveSettings = async (e) => {
     e.preventDefault();
     const settings = {
-        joinBonus: parseInt(elements.settingJoinBonus.value),
-        dailyBonus: parseInt(elements.settingDailyBonus.value),
-        referralBonus: parseInt(elements.settingReferralBonus.value),
-        postCost: parseInt(elements.settingPostCost.value),
-        paymentNumber: elements.settingPaymentNumber.value.trim(),
+        joinBonus: parseInt(document.getElementById('settingJoinBonus').value),
+        dailyBonus: parseInt(document.getElementById('settingDailyBonus').value),
+        referralBonus: parseInt(document.getElementById('settingReferralBonus').value),
+        postCost: parseInt(document.getElementById('settingPostCost').value),
+        minWithdrawal: parseInt(document.getElementById('settingMinWithdrawal').value),
+        pointsToBdt: parseInt(document.getElementById('settingPointsToBdt').value),
+        paymentNumber: document.getElementById('settingPaymentNumber').value,
+        privacyPolicy: document.getElementById('settingPrivacyPolicy').value,
+        terms: document.getElementById('settingTerms').value,
     };
-    set(ref(db, 'settings'), settings)
-        .then(() => alert('Settings saved successfully!'))
-        .catch(err => alert(`Error: ${err.message}`));
+    await set(ref(db, 'settings'), settings);
+    alert('Settings saved successfully!');
 };
 
+// =======================================================
+// ===              EVENT LISTENERS SETUP              ===
+// =======================================================
 
-// =======================================================
-// ===               EVENT LISTENERS SETUP             ===
-// =======================================================
-function setupEventListeners() {
-    elements.loginForm.addEventListener('submit', handleLogin);
-    elements.logoutBtn.addEventListener('click', handleLogout);
-    elements.sidebarLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
+document.addEventListener('DOMContentLoaded', () => {
+
+    adminLoginForm.addEventListener('submit', handleLogin);
+    adminLogoutBtn.addEventListener('click', handleLogout);
+    settingsForm.addEventListener('submit', handleSaveSettings);
+    saveTagBtn.addEventListener('click', handleSaveTag);
+    linkChannelForm.addEventListener('submit', handleLinkChannel);
+    
+    // Sidebar Navigation
+    adminSidebar.addEventListener('click', (e) => {
+        if (e.target.matches('.nav-link')) {
             e.preventDefault();
-            navigateToSection(link.dataset.section);
-        });
+            const sectionId = e.target.dataset.section;
+            if (sectionId) {
+                showSection(sectionId);
+                const offcanvas = bootstrap.Offcanvas.getInstance(adminSidebar);
+                if (offcanvas) offcanvas.hide();
+            }
+        }
     });
-    elements.updatePointsForm.addEventListener('submit', window.updateUserPoints);
-    elements.saveTagBtn.addEventListener('click', window.saveTag);
-    elements.linkChannelForm.addEventListener('submit', window.linkChannel);
-    elements.settingsForm.addEventListener('submit', window.saveSettings);
-    elements.userSearchInput.addEventListener('input', (e) => {
+
+    // Event Delegation for dynamic content
+    adminMainContent.addEventListener('click', (e) => {
+        const target = e.target.closest('button');
+        if (!target) return;
+
+        // Post actions
+        if (target.matches('.view-post-btn')) handleViewPost(target.dataset.id);
+        if (target.matches('.approve-post-btn')) handleApprovePost(target.dataset.id);
+        if (target.matches('.reject-post-btn')) handleRejectPost(target.dataset.id);
+
+        // User actions
+        if (target.matches('.view-user-btn')) handleViewUser(target.dataset.id);
+
+        // Tag actions
+        if (target.matches('.delete-tag-btn')) handleDeleteTag(target.dataset.tag);
+    });
+    
+    linkedChannelsContainer.addEventListener('click', (e) => {
+        const target = e.target.closest('.remove-channel-btn');
+        if(target) {
+            handleRemoveChannel(target.dataset.tag, target.dataset.id);
+        }
+    });
+    
+    // Modal related buttons
+    document.getElementById('confirmRejectBtn').addEventListener('click', confirmRejectPost);
+    document.getElementById('suspendUserBtn').addEventListener('click', handleSuspendUser);
+    document.getElementById('reactivateUserBtn').addEventListener('click', handleReactivateUser);
+    document.getElementById('updatePointsForm').addEventListener('submit', handleUpdatePoints);
+
+    // User search
+    document.getElementById('userSearchInput').addEventListener('input', (e) => {
         const searchTerm = e.target.value.toLowerCase();
-        const rows = elements.usersTableBody.getElementsByTagName('tr');
-        Array.from(rows).forEach(row => {
-            row.style.display = row.textContent.toLowerCase().includes(searchTerm) ? '' : 'none';
-        });
+        const filteredUsers = {};
+        for (const userId in state.allUsers) {
+            const user = state.allUsers[userId];
+            if (
+                userId.toLowerCase().includes(searchTerm) ||
+                (user.name && user.name.toLowerCase().includes(searchTerm)) ||
+                (user.email && user.email.toLowerCase().includes(searchTerm))
+            ) {
+                filteredUsers[userId] = user;
+            }
+        }
+        renderUsers(filteredUsers);
     });
-}
-setupEventListeners();
-
-// =======================================================
-// ===        REALTIME LISTENER SETUP/CLEANUP          ===
-// =======================================================
-function setupRealtimeListeners() {
-    // Listen for pending posts count
-    const pendingPostsQuery = query(ref(db, 'posts'), orderByChild('status'), equalTo('pending'));
-    dbListeners.pendingPosts = onValue(pendingPostsQuery, snapshot => {
-        const count = snapshot.exists() ? snapshot.size : 0;
-        elements.pendingPostsCountBadge.textContent = count;
-        elements.pendingPostsCountBadge.style.display = count > 0 ? 'inline-block' : 'none';
-    });
-    // Listen for pending payments count
-    const pendingPaymentsQuery = query(ref(db, 'paymentRequests'), orderByChild('status'), equalTo('pending'));
-    dbListeners.pendingPayments = onValue(pendingPaymentsQuery, snapshot => {
-        const count = snapshot.exists() ? snapshot.size : 0;
-        elements.pendingPaymentsCountBadge.textContent = count;
-        elements.pendingPaymentsCountBadge.style.display = count > 0 ? 'inline-block' : 'none';
-    });
-}
-
-function detachAllListeners() {
-    Object.values(dbListeners).forEach(listenerRef => {
-        // The onValue function returns an unsubscribe function.
-        // It's better to store that function and call it.
-        // For simplicity here, we assume the object can be turned off,
-        // but this approach is flawed. A better way is to store unsubscribe functions.
-        // off(listenerRef); 
-    });
-    dbListeners = {};
-}
-// Utility to show loader
-const showLoader = (show) => { elements.loader.style.display = show ? 'flex' : 'none'; };
+});
