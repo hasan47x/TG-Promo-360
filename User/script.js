@@ -1,9 +1,9 @@
+// =======================================================
+// ===               INITIALIZATION                    ===
+// =======================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // =======================================================
-    // ===          1. FIREBASE INITIALIZATION           ===
-    // =======================================================
-    
-    // অনুগ্রহ করে এখানে আপনার Firebase প্রজেক্টের কনফিগারেশন যুক্ত করুন।
+    // Firebase v8 Configuration
+    // IMPORTANT: Replace with your actual Firebase project configuratin
     const firebaseConfig = {
     apiKey: "AIzaSyAe3TMK4RHmReffbhxZeYi5NuHgmJJWlTo",
     authDomain: "supchat-5474d.firebaseapp.com",
@@ -14,481 +14,545 @@ document.addEventListener('DOMContentLoaded', () => {
     appId: "1:170794585438:web:da9cb1f6d7cc3408b493cf"
     };
 
+
+
+
+    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.database();
     const googleProvider = new firebase.auth.GoogleAuthProvider();
 
-    // =======================================================
-    // ===            2. DOM ELEMENT SELECTORS           ===
-    // =======================================================
+    // App State
+    let currentUserData = null;
+    let currentUserAuth = null;
+    let settings = {};
+
+    // DOM Elements
     const globalLoader = document.getElementById('globalLoader');
     const authContainer = document.getElementById('authContainer');
     const appContainer = document.getElementById('appContainer');
-    
-    // UI elements
-    const headerSectionTitle = document.getElementById('headerSectionTitle');
-    const sections = document.querySelectorAll('.section');
-    const navButtons = document.querySelectorAll('.nav-item');
-    const sideNavLinks = document.querySelectorAll('#sideNavMenu .nav-link');
-    const bsOffcanvas = new bootstrap.Offcanvas('#sideMenu');
+
+    // Environment Detection
+    const isTelegram = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
+
+    if (isTelegram) {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+        handleTelegramLogin();
+    } else {
+        handleWebBrowserLogin();
+    }
 
     // =======================================================
-    // ===        3. AUTHENTICATION STATE OBSERVER         ===
+    // ===            AUTHENTICATION HANDLERS              ===
     // =======================================================
-    // এটি অ্যাপের মূল চালক। ব্যবহারকারী লগইন বা লগআউট করলে এটি ট্রিগার হয়।
-    auth.onAuthStateChanged(user => {
-        globalLoader.style.display = 'flex'; // লোডার দেখান
-        if (user) {
-            // ব্যবহারকারী লগইন করা আছে
-            console.log("User is signed in:", user.uid);
-            initializeUser(user);
-        } else {
-            // ব্যবহারকারী লগইন করা নেই
-            console.log("User is signed out.");
-            // টেলিগ্রাম অ্যাপের ভিতর কিনা চেক করুন
-            if (isTelegram()) {
-                 // টেলিগ্রামের মাধ্যমে স্বয়ংক্রিয় লগইনের জন্য এখানে কোড লিখতে হবে (ব্যাকএন্ড প্রয়োজন)।
-                 // আপাতত, টেলিগ্রাম ব্যবহারকারীকেও লগইন পেজ দেখানো হবে যদি তারা লগইন করা না থাকে।
-                 console.log("Inside Telegram, but user is not authenticated. Showing auth page.");
-                 showAuthUI();
+
+    function handleTelegramLogin() {
+        const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+        if (!tgUser) {
+            showError("Could not verify Telegram user.");
+            globalLoader.style.display = 'none';
+            return;
+        }
+        const userId = tgUser.id.toString();
+        const userRef = db.ref(`users/${userId}`);
+        userRef.once('value', snapshot => {
+            if (snapshot.exists()) {
+                currentUserData = { id: userId, ...snapshot.val() };
+                if (!currentUserData.password) {
+                    new bootstrap.Modal(document.getElementById('setPasswordModal')).show();
+                }
+                initializeApp(currentUserData);
             } else {
-                // সাধারণ ব্রাউজার, লগইন পেজ দেখান
-                showAuthUI();
-            }
-        }
-    });
-
-    function isTelegram() {
-        return window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
-    }
-
-    // =======================================================
-    // ===        4. UI MANAGEMENT FUNCTIONS             ===
-    // =======================================================
-    
-    function showAuthUI() {
-        appContainer.style.display = 'none';
-        authContainer.style.display = 'flex';
-        globalLoader.style.display = 'none';
-        document.body.classList.add('ready');
-    }
-
-    function showAppUI() {
-        authContainer.style.display = 'none';
-        appContainer.style.display = 'block';
-        globalLoader.style.display = 'none';
-        document.body.classList.add('ready');
-        navigateToSection('home-section'); // ডিফল্ট সেকশন হিসেবে হোম দেখান
-    }
-    
-    // সেকশন পরিবর্তন করার ফাংশন
-    function navigateToSection(sectionId) {
-        sections.forEach(section => {
-            section.classList.remove('active');
-        });
-        const activeSection = document.getElementById(sectionId);
-        if (activeSection) {
-            activeSection.classList.add('active');
-            
-            // 헤더 শিরোনাম পরিবর্তন
-            const title = activeSection.querySelector('.section-title')?.textContent || sectionId.replace('-section', '').replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
-            headerSectionTitle.textContent = title;
-
-            // বটম ন্যাভিগেশন ও সাইড মেনু-এর অ্যাক্টিভ স্টেট আপডেট
-            updateNavActiveState(sectionId);
-        }
-        bsOffcanvas.hide(); // মেনু খোলা থাকলে বন্ধ করুন
-    }
-
-    function updateNavActiveState(sectionId) {
-        const navElements = [...navButtons, ...sideNavLinks];
-        navElements.forEach(nav => {
-            if (nav.dataset.section === sectionId) {
-                nav.classList.add('active');
-            } else {
-                nav.classList.remove('active');
-            }
-        });
-    }
-
-    // ন্যাভিগেশন ইভেন্ট লিসেনার
-    document.body.addEventListener('click', (e) => {
-        const targetElement = e.target.closest('[data-section]');
-        if (targetElement) {
-            e.preventDefault();
-            const sectionId = targetElement.dataset.section;
-            navigateToSection(sectionId);
-        }
-    });
-
-    // =======================================================
-    // ===          5. USER INITIALIZATION & DATA        ===
-    // =======================================================
-    
-    function initializeUser(user) {
-        const userRef = db.ref(`users/${user.uid}`);
-        
-        userRef.on('value', (snapshot) => {
-            const userData = snapshot.val();
-            if (!userData) {
-                // যদি ডাটাবেসে ব্যবহারকারীর তথ্য না থাকে (যেমন গুগল দিয়ে প্রথমবার লগইন)
-                console.log("User data not found in DB, creating new entry.");
                 const newUser = {
-                    name: user.displayName || 'New User',
-                    email: user.email,
-                    photoUrl: user.photoURL || 'https://via.placeholder.com/80',
-                    points: 50, // Welcome bonus
-                    joinDate: firebase.database.ServerValue.TIMESTAMP,
-                    lastDailyBonus: 0
+                    name: `${tgUser.first_name} ${tgUser.last_name || ''}`.trim(),
+                    username: tgUser.username || '',
+                    tgId: userId,
+                    photoUrl: tgUser.photo_url || 'https://via.placeholder.com/80',
+                    points: 100, // Join Bonus
+                    joined: firebase.database.ServerValue.TIMESTAMP,
                 };
                 userRef.set(newUser).then(() => {
-                    updateUIWithUserData(newUser, user.uid);
+                    db.ref(`users/${userId}/transactions`).push({ type: 'bonus', amount: 100, reason: 'Join Bonus', timestamp: firebase.database.ServerValue.TIMESTAMP });
+                    currentUserData = { id: userId, ...newUser };
+                    new bootstrap.Modal(document.getElementById('setPasswordModal')).show();
+                    initializeApp(currentUserData);
                 });
-            } else {
-                updateUIWithUserData(userData, user.uid);
             }
-            
-            // fetch user-specific data
-            fetchMyPosts(user.uid);
-            fetchTransactions(user.uid);
         });
-        showAppUI();
     }
 
-    function updateUIWithUserData(userData, uid) {
-        // Header & Menu
+    function handleWebBrowserLogin() {
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                currentUserAuth = user;
+                const userRef = db.ref(`users/${user.uid}`);
+                userRef.once('value', snapshot => {
+                    if (snapshot.exists()) {
+                        currentUserData = { id: user.uid, ...snapshot.val() };
+                        initializeApp(currentUserData);
+                    } else {
+                        const newUser = {
+                            name: user.displayName || 'New User',
+                            email: user.email,
+                            photoUrl: user.photoURL || 'https://via.placeholder.com/80',
+                            points: 100, // Join Bonus
+                            joined: firebase.database.ServerValue.TIMESTAMP,
+                        };
+                        userRef.set(newUser).then(() => {
+                            db.ref(`users/${user.uid}/transactions`).push({ type: 'bonus', amount: 100, reason: 'Join Bonus', timestamp: firebase.database.ServerValue.TIMESTAMP });
+                            currentUserData = { id: user.uid, ...newUser };
+                            initializeApp(currentUserData);
+                        });
+                    }
+                });
+            } else {
+                globalLoader.style.display = 'none';
+                appContainer.style.display = 'none';
+                authContainer.style.display = 'flex';
+                document.body.style.padding = '0';
+            }
+        });
+        setupWebAuthListeners();
+    }
+    
+    function setupWebAuthListeners() {
+        const webLoginCard = document.getElementById('webLoginCard');
+        const webSignupCard = document.getElementById('webSignupCard');
+        const telegramLoginCard = document.getElementById('telegramLoginCard');
+
+        document.getElementById('emailLoginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            globalLoader.style.display = 'flex';
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            auth.signInWithEmailAndPassword(email, password).catch(error => {
+                globalLoader.style.display = 'none';
+                showError(error.message);
+            });
+        });
+
+        document.getElementById('emailSignupForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            globalLoader.style.display = 'flex';
+            const name = document.getElementById('signupName').value;
+            const email = document.getElementById('signupEmail').value;
+            const password = document.getElementById('signupPassword').value;
+            if (name.trim().length < 2) {
+                globalLoader.style.display = 'none';
+                return showError("Please enter a valid name.");
+            }
+            auth.createUserWithEmailAndPassword(email, password)
+                .then(userCredential => userCredential.user.updateProfile({ displayName: name }))
+                .catch(error => {
+                    globalLoader.style.display = 'none';
+                    showError(error.message);
+                });
+        });
+
+        document.getElementById('googleSignInBtn').addEventListener('click', () => {
+            globalLoader.style.display = 'flex';
+            auth.signInWithPopup(googleProvider).catch(error => {
+                globalLoader.style.display = 'none';
+                showError(error.message);
+            });
+        });
+        
+        document.getElementById('telegramLoginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            globalLoader.style.display = 'flex';
+            const tgIdentifier = document.getElementById('tgUsername').value;
+            const password = document.getElementById('tgPassword').value;
+            db.ref('users').orderByChild('tgId').equalTo(tgIdentifier).once('value', snapshot => {
+                if(snapshot.exists()){
+                     handleTgLoginAttempt(snapshot, password);
+                } else {
+                     db.ref('users').orderByChild('username').equalTo(tgIdentifier).once('value', snap => {
+                        if(snap.exists()){ handleTgLoginAttempt(snap, password); } 
+                        else { globalLoader.style.display = 'none'; showError("User not found."); }
+                    });
+                }
+            });
+        });
+
+        document.getElementById('switchToSignup').addEventListener('click', (e) => { e.preventDefault(); webLoginCard.style.display = 'none'; telegramLoginCard.style.display = 'none'; webSignupCard.style.display = 'block'; });
+        document.getElementById('switchToLogin').addEventListener('click', (e) => { e.preventDefault(); webSignupCard.style.display = 'none'; telegramLoginCard.style.display = 'none'; webLoginCard.style.display = 'block'; });
+        document.getElementById('switchToTgLoginFromLogin').addEventListener('click', (e) => { e.preventDefault(); webLoginCard.style.display = 'none'; webSignupCard.style.display = 'none'; telegramLoginCard.style.display = 'block'; });
+        document.getElementById('switchToWebLogin').addEventListener('click', (e) => { e.preventDefault(); telegramLoginCard.style.display = 'none'; webSignupCard.style.display = 'none'; webLoginCard.style.display = 'block'; });
+    }
+
+    function handleTgLoginAttempt(snapshot, password){
+        const userId = Object.keys(snapshot.val())[0];
+        const userData = snapshot.val()[userId];
+        if (userData.password && userData.password === password) {
+             currentUserData = { id: userId, ...userData };
+             initializeApp(currentUserData);
+        } else {
+            globalLoader.style.display = 'none';
+            showError("Invalid password.");
+        }
+    }
+
+    // =======================================================
+    // ===             MAIN APP LOGIC                      ===
+    // =======================================================
+
+    function initializeApp(userData) {
+        authContainer.style.display = 'none';
+        globalLoader.style.display = 'none';
+        appContainer.style.display = 'block';
+        document.body.style.paddingTop = '75px';
+        document.body.style.paddingBottom = '75px';
+        document.body.classList.add('ready');
+
+        db.ref('settings').once('value', (snapshot) => {
+            settings = snapshot.val() || { postCost: 100, dailyBonus: 20 };
+            const estimatedCostEl = document.getElementById('estimatedCost');
+            if(estimatedCostEl) estimatedCostEl.textContent = settings.postCost || 100;
+
+            buildSideMenu();
+            updateUserInfoUI(userData);
+            setupNavigation();
+            loadDynamicContent();
+            setupEventListeners();
+            navigateToSection('home-section');
+        });
+    }
+
+    function updateUserInfoUI(userData) {
         document.getElementById('headerUserPoints').textContent = userData.points || 0;
         document.getElementById('menuUserName').textContent = userData.name || 'Guest';
         document.getElementById('menuUserPic').src = userData.photoUrl || 'https://via.placeholder.com/80';
-        document.getElementById('menuUserTgId').textContent = `UID: ${uid.substring(0, 10)}...`;
-
-        // Home
-        document.getElementById('homeUserName').textContent = userData.name || 'User';
-
-        // Profile
-        document.getElementById('profileName').textContent = userData.name || 'User Name';
+        document.getElementById('menuUserTgId').textContent = `ID: ${userData.tgId || userData.id}`;
+        document.getElementById('profileName').textContent = userData.name || 'User';
         document.getElementById('profileAvatar').src = userData.photoUrl || 'https://via.placeholder.com/80';
-        document.getElementById('profileId').textContent = `UID: ${uid}`;
+        document.getElementById('profileId').textContent = `ID: ${userData.tgId || userData.id}`;
+        document.getElementById('walletPointsDisplay').textContent = userData.points || 0;
+        updateAccountLinkingUI(userData);
+    }
+    
+    function updateAccountLinkingUI(userData) {
+        const connectGoogleLink = document.getElementById('connectGoogleLink');
+        const connectTelegramLink = document.getElementById('connectTelegramLink');
+        const connectedGoogleAccount = document.getElementById('connectedGoogleAccount');
+        const connectedTelegramAccount = document.getElementById('connectedTelegramAccount');
         
-        // Wallet
-        document.getElementById('walletPointsDisplay').innerHTML = `${userData.points || 0} <i class="bi bi-coin text-warning"></i>`;
-
-        // Daily Bonus
-        updateDailyBonusUI(userData.lastDailyBonus);
+        if (currentUserAuth && currentUserAuth.providerData.some(p => p.providerId === 'google.com')) {
+            connectGoogleLink.style.display = 'none';
+            connectedGoogleAccount.style.display = 'flex';
+            document.getElementById('googleEmailSpan').textContent = currentUserAuth.email;
+        } else if (currentUserAuth) {
+             connectGoogleLink.style.display = 'flex';
+             connectedGoogleAccount.style.display = 'none';
+        } else {
+            connectGoogleLink.style.display = 'none';
+            connectedGoogleAccount.style.display = 'none';
+        }
+        if (userData.tgId) {
+            connectTelegramLink.style.display = 'none';
+            connectedTelegramAccount.style.display = 'flex';
+            document.getElementById('telegramIdSpan').textContent = `ID: ${userData.tgId}`;
+        } else {
+            connectTelegramLink.style.display = 'flex';
+            connectedTelegramAccount.style.display = 'none';
+        }
     }
 
-    // =======================================================
-    // ===             6. AUTHENTICATION FORMS           ===
-    // =======================================================
+    function buildSideMenu() {
+        const menuItems = [
+            { icon: 'bi-house-door-fill', text: 'Home', section: 'home-section' },
+            { icon: 'bi-gem', text: 'Earn Points', section: 'earn-section' },
+            { icon: 'bi-collection-fill', text: 'My Content', section: 'posts-section' },
+            { icon: 'bi-wallet2', text: 'My Wallet', section: 'wallet-section' },
+            { icon: 'bi-person-fill', text: 'My Profile', section: 'profile-section' },
+        ];
+        const menuContainer = document.getElementById('sideNavMenu');
+        menuContainer.innerHTML = '';
+        menuItems.forEach(item => {
+            menuContainer.innerHTML += `
+                <li>
+                    <a class="nav-link" data-section="${item.section}">
+                        <i class="bi ${item.icon}"></i> ${item.text}
+                    </a>
+                </li>
+            `;
+        });
+    }
 
-    // Signup Form
-    document.getElementById('emailSignupForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const name = document.getElementById('signupName').value;
-        const email = document.getElementById('signupEmail').value;
-        const password = document.getElementById('signupPassword').value;
-
-        auth.createUserWithEmailAndPassword(email, password)
-            .then((userCredential) => {
-                const user = userCredential.user;
-                return user.updateProfile({ displayName: name }).then(() => user);
-            })
-            .then((user) => {
-                // ডাটাবেসে নতুন ব্যবহারকারীর তথ্য তৈরি করা হবে `onAuthStateChanged` এ `initializeUser` ফাংশনের মাধ্যমে
-                console.log('Signup successful for', user.email);
-            })
-            .catch((error) => {
-                alert(`Signup Failed: ${error.message}`);
+    function setupNavigation() {
+        document.querySelectorAll('.nav-item, .menu-nav .nav-link, [data-section]').forEach(link => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const sectionId = link.dataset.section;
+                if (sectionId) {
+                    navigateToSection(sectionId);
+                    const offcanvasEl = document.getElementById('sideMenu');
+                    const offcanvas = bootstrap.Offcanvas.getInstance(offcanvasEl);
+                    if (offcanvas) offcanvas.hide();
+                }
             });
-    });
-
-    // Login Form
-    document.getElementById('emailLoginForm').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const email = document.getElementById('loginEmail').value;
-        const password = document.getElementById('loginPassword').value;
-        auth.signInWithEmailAndPassword(email, password).catch((error) => {
-            alert(`Login Failed: ${error.message}`);
         });
-    });
+    }
 
-    
-
-    // Logout
-    document.getElementById('logoutButton').addEventListener('click', (e) => {
-        e.preventDefault();
-        auth.signOut();
-    });
-
-    // Auth page switcher
-    document.getElementById('switchToSignup').addEventListene('click', () => {
-        document.getElementById('webLoginCard').style.display = 'none';
-        document.getElementById('webSignupCard').style.display = 'block';
-    });
-    document.getElementById('switchToLogin').addEventListener('click', () => {
-        document.getElementById('webSignupCard').style.display = 'none';
-        document.getElementById('webLoginCard').style.display = 'block';
-    });
-    
-    // =======================================================
-    // ===             7. CORE APP FEATURES              ===
-    // =======================================================
-
-        // --- Theme Switcher ---
-    const themeSwitch = document.getElementById('themeSwitch');
-    const currentTheme = localStorage.getItem('theme') || 'dark';
-    document.body.classList.toggle('light-mode', currentTheme === 'light');
-    themeSwitch.checked = currentTheme === 'light';
-    
-    themeSwitch.addEventListener('change', (e) => {
-        if (e.target.checked) {
-            document.body.classList.add('light-mode');
-            localStorage.setItem('theme', 'light');
-        } else {
-            document.body.classList.remove('light-mode');
-            localStorage.setItem('theme', 'dark');
+    function navigateToSection(sectionId) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        const targetSection = document.getElementById(sectionId);
+        if (targetSection) {
+            targetSection.classList.add('active');
+            const link = document.querySelector(`[data-section="${sectionId}"]`);
+            const title = link ? (link.querySelector('span')?.textContent || link.textContent.trim().replace(/<[^>]*>?/gm, '').split(" ").pop()) : 'Dashboard';
+            document.getElementById('headerSectionTitle').textContent = title;
+            document.querySelectorAll('.nav-item, .menu-nav .nav-link').forEach(nav => {
+                nav.classList.toggle('active', nav.dataset.section === sectionId);
+            });
         }
-    });
-
-
-    // --- Create Post Form Logic ---
-    const createPostForm = document.getElementById('createPostForm');
-    const addCustomButtonSwitch = document.getElementById('addCustomButtonSwitch');
-    const customButtonFields = document.getElementById('customButtonFields');
-    const scheduleOption = document.querySelectorAll('input[name="scheduleOption"]');
-    const scheduleTimeFields = document.getElementById('scheduleTimeFields');
-
-    addCustomButtonSwitch.addEventListener('change', () => {
-        customButtonFields.style.display = addCustomButtonSwitch.checked ? 'block' : 'none';
-    });
-
-    scheduleOption.forEach(radio => {
-        radio.addEventListener('change', () => {
-            scheduleTimeFields.style.display = document.getElementById('postLater').checked ? 'block' : 'none';
+    }
+    
+    function loadDynamicContent() {
+        loadHomePage();
+        loadMyPosts();
+        loadTransactions();
+        loadTags();
+        db.ref(`users/${currentUserData.id}/points`).on('value', (snapshot) => {
+            const points = snapshot.val() || 0;
+            currentUserData.points = points;
+            document.getElementById('headerUserPoints').textContent = points;
+            document.getElementById('walletPointsDisplay').textContent = points;
         });
-    });
+    }
 
-    // Fetch tags for post creation
-    db.ref('tags').on('value', snapshot => {
+    function loadHomePage() {
+        const homeSection = document.getElementById('home-section');
+        homeSection.innerHTML = `
+            <div class="custom-card text-center">
+                <h4 class="mb-1">Welcome, ${currentUserData.name}!</h4>
+                <p class="text-secondary">Ready to promote your content?</p>
+                <div class="d-grid gap-2 mt-4">
+                    <button class="btn btn-primary btn-lg" data-section="create-post-section">
+                        <i class="bi bi-plus-circle-fill me-2"></i>Create a New Post
+                    </button>
+                    <button class="btn btn-outline-warning" data-section="wallet-section">
+                        <i class="bi bi-wallet2 me-2"></i>View My Wallet
+                    </button>
+                </div>
+            </div>
+            <div class="custom-card">
+                 <h5>Recent Activity</h5>
+                 <div id="home-transactions"></div>
+            </div>
+        `;
+        // Load recent transactions for home page
+        db.ref(`users/${currentUserData.id}/transactions`).orderByChild('timestamp').limitToLast(3).once('value', snapshot => {
+            const container = document.getElementById('home-transactions');
+            if(!container) return;
+            container.innerHTML = '';
+            let transactionsHtml = '';
+            snapshot.forEach(child => {
+                const t = child.val();
+                const isBonus = t.type === 'bonus';
+                transactionsHtml = `
+                    <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                        <span>${t.reason}</span>
+                        <span class="fw-bold text-${isBonus ? 'success' : 'danger'}">${isBonus ? '+' : '-'}${t.amount}</span>
+                    </div>
+                ` + transactionsHtml;
+            });
+            container.innerHTML = transactionsHtml || '<p class="text-secondary text-center">No recent activity.</p>';
+        });
+    }
+
+    function loadTags() {
         const tagsContainer = document.getElementById('postTagsContainer');
-        tagsContainer.innerHTML = '';
-        if (snapshot.exists()) {
-            const tags = snapshot.val();
-            for (const tagName in tags) {
-                const tagBtn = document.createElement('button');
-                tagBtn.type = 'button';
-                tagBtn.className = 'tag-btn';
-                tagBtn.dataset.tag = tagName;
-                tagBtn.textContent = tagName;
-                tagsContainer.appendChild(tagBtn);
-            }
-        }
-    });
-
-    // Tag selection logic
-    document.getElementById('postTagsContainer').addEventListener('click', e => {
-        if (e.target.classList.contains('tag-btn')) {
-            const selectedCount = document.querySelectorAll('.tag-btn.selected').length;
-            if (e.target.classList.contains('selected')) {
-                e.target.classList.remove('selected');
-            } else if (selectedCount < 3) {
-                e.target.classList.add('selected');
-            } else {
-                alert('You can select up to 3 tags.');
-            }
-        }
-    });
-
-    // Form Submission
-    createPostForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const user = auth.currentUser;
-        if (!user) {
-            alert('You must be logged in to post.');
-            return;
-        }
-
-        const postContent = document.getElementById('postContent').value.trim();
-        if (!postContent) {
-            alert('Post content cannot be empty.');
-            return;
-        }
-
-        const selectedTags = Array.from(document.querySelectorAll('.tag-btn.selected')).map(btn => btn.dataset.tag);
-        if (selectedTags.length === 0) {
-            alert('Please select at least one tag.');
-            return;
-        }
-
-        const postData = {
-            userId: user.uid,
-            userName: user.displayName,
-            content: postContent,
-            tags: selectedTags,
-            status: 'pending',
-            createdAt: firebase.database.ServerValue.TIMESTAMP
-        };
-
-        if (addCustomButtonSwitch.checked) {
-            const buttonText = document.getElementById('buttonText').value.trim();
-            const buttonUrl = document.getElementById('buttonUrl').value.trim();
-            if (buttonText && buttonUrl) {
-                postData.customButton = { text: buttonText, url: buttonUrl };
-            }
-        }
-
-        if (document.getElementById('postLater').checked) {
-            const scheduleDateTime = document.getElementById('scheduleDateTime').value;
-            if (scheduleDateTime) {
-                postData.status = 'scheduled';
-                postData.scheduleTime = new Date(scheduleDateTime).getTime();
-            }
-        }
+        if (!tagsContainer) return;
         
-        const newPostRef = db.ref('posts').push();
-        newPostRef.set(postData)
-            .then(() => {
-                alert('Post submitted successfully for review!');
-                createPostForm.reset();
-                customButtonFields.style.display = 'none';
-                scheduleTimeFields.style.display = 'none';
-                document.querySelectorAll('.tag-btn.selected').forEach(btn => btn.classList.remove('selected'));
-                navigateToSection('posts-section');
-            })
-            .catch(error => {
-                alert('Error submitting post: ' + error.message);
-            });
-    });
-    
-    // --- Fetch My Posts ---
-    function fetchMyPosts(uid) {
-        const postsRef = db.ref('posts').orderByChild('userId').equalTo(uid);
-        postsRef.on('value', snapshot => {
-            const myPostsContainer = document.getElementById('myPostsContainer');
-            myPostsContainer.innerHTML = '<p class="text-center text-secondary">Loading your posts...</p>';
+        db.ref('tags').on('value', snapshot => {
+            tagsContainer.innerHTML = '';
             if (snapshot.exists()) {
-                myPostsContainer.innerHTML = '';
-                snapshot.forEach(childSnapshot => {
-                    const post = childSnapshot.val();
-                    const postId = childSnapshot.key;
-                    const statusClass = `status-${post.status}`; // e.g., status-pending
-                    const statusBadgeColor = {
-                        pending: 'bg-warning text-dark',
-                        published: 'bg-success',
-                        rejected: 'bg-danger',
-                        scheduled: 'bg-primary',
-                        archived: 'bg-secondary'
-                    }[post.status] || 'bg-secondary';
-                    
-                    const postCard = `
-                        <div class="custom-card post-item-card ${statusClass}" data-post-id="${postId}">
-                            <div class="post-item-header">
-                                <h6 class="mb-0">${post.content.substring(0, 30)}...</h6>
-                                <span class="badge ${statusBadgeColor}">${post.status.charAt(0).toUpperCase() + post.status.slice(1)}</span>
-                            </div>
-                            <p class="post-item-content text-secondary">${post.tags.join(', ')}</p>
-                            <small class="text-secondary">Submitted: ${new Date(post.createdAt).toLocaleDateString()}</small>
-                        </div>`;
-                    myPostsContainer.insertAdjacentHTML('afterbegin', postCard);
+                snapshot.forEach(child => {
+                    tagsContainer.innerHTML += `<button type="button" class="tag-btn" data-tag="${child.key}">#${child.val().name}</button>`;
                 });
-            } else {
-                myPostsContainer.innerHTML = '<p class="text-center text-secondary">You haven\'t created any posts yet.</p>';
-            }
-        });
-    }
-
-    // --- Fetch Transaction History ---
-    function fetchTransactions(uid) {
-        const transactionsRef = db.ref(`users/${uid}/transactions`).limitToLast(20);
-        transactionsRef.on('value', snapshot => {
-            const container = document.getElementById('transactionListContainer');
-            container.innerHTML = '<p class="text-center text-secondary">Loading transaction history...</p>';
-            if (snapshot.exists()) {
-                container.innerHTML = '';
-                snapshot.forEach(childSnapshot => {
-                    const tx = childSnapshot.val();
-                    const amountClass = tx.amount > 0 ? 'text-success' : 'text-danger';
-                    const amountSign = tx.amount > 0 ? '+' : '';
-                    
-                    const txItem = `
-                        <div class="list-group-item transaction-item">
-                            <div class="d-flex w-100 justify-content-between">
-                                <h6>${tx.description || tx.reason || 'Transaction'}</h6>
-                                <small>${new Date(tx.timestamp).toLocaleDateString()}</small>
-                            </div>
-                            <p class="mb-1 text-secondary">Type: ${tx.type}</p>
-                            <strong class="${amountClass}">${amountSign}${tx.amount} Points</strong>
-                        </div>`;
-                    container.insertAdjacentHTML('afterbegin', txItem);
-                });
-            } else {
-                container.innerHTML = '<p class="text-center text-secondary">No transactions found.</p>';
-            }
-        });
-    }
-
-    // --- Daily Bonus ---
-    const dailyBonusLink = document.getElementById('dailyBonusLink');
-    function updateDailyBonusUI(lastBonusTime) {
-        const twentyFourHours = 24 * 60 * 60 * 1000;
-        const now = Date.now();
-        const badge = document.getElementById('dailyBonusBadge');
-        if (now - lastBonusTime > twentyFourHours) {
-            badge.textContent = 'Claim Now';
-            badge.className = 'badge rounded-pill bg-success';
-            dailyBonusLink.style.pointerEvents = 'auto';
-            dailyBonusLink.style.opacity = '1';
-        } else {
-            const timeLeft = twentyFourHours - (now - lastBonusTime);
-            const hours = Math.floor(timeLeft / (1000 * 60 * 60));
-            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-            badge.textContent = `Wait ${hours}h ${minutes}m`;
-            badge.className = 'badge rounded-pill bg-secondary';
-            dailyBonusLink.style.pointerEvents = 'none';
-            dailyBonusLink.style.opacity = '0.6';
-        }
-    }
-
-    dailyBonusLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        const user = auth.currentUser;
-        if (!user) return;
-
-        const userRef = db.ref(`users/${user.uid}`);
-        userRef.transaction(userData => {
-            if (userData) {
-                const now = Date.now();
-                const twentyFourHours = 24 * 60 * 60 * 1000;
-                if (!userData.lastDailyBonus || (now - userData.lastDailyBonus > twentyFourHours)) {
-                    userData.points = (userData.points || 0) + 20; // Daily bonus amount
-                    userData.lastDailyBonus = now;
-
-                    // Add transaction
-                    if (!userData.transactions) {
-                        userData.transactions = {};
+                tagsContainer.addEventListener('click', e => {
+                    if (e.target.classList.contains('tag-btn')) {
+                        const selectedCount = tagsContainer.querySelectorAll('.selected').length;
+                        if (!e.target.classList.contains('selected') && selectedCount >= 3) {
+                            showError("You can select up to 3 tags only.");
+                            return;
+                        }
+                        e.target.classList.toggle('selected');
                     }
-                    const newTxKey = db.ref().child('transactions').push().key;
-                    userData.transactions[newTxKey] = {
-                        type: 'daily_bonus',
-                        description: 'Daily bonus claimed',
-                        amount: 20,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    };
+                });
+            }
+        });
+    }
+
+    function loadMyPosts() {
+        const postsContainer = document.getElementById('myPostsContainer');
+        if (!postsContainer) return;
+        
+        const userPostsRef = db.ref(`users/${currentUserData.id}/posts`).orderByValue();
+        userPostsRef.on('value', snapshot => {
+            postsContainer.innerHTML = '<p class="text-center text-secondary">Loading your posts...</p>';
+            if (!snapshot.exists()) {
+                postsContainer.innerHTML = '<p class="text-center text-secondary">You have not created any posts yet.</p>';
+                return;
+            }
+            postsContainer.innerHTML = '';
+            let postPromises = [];
+            snapshot.forEach(childSnapshot => {
+                const postId = childSnapshot.key;
+                postPromises.push(db.ref(`posts/${postId}`).once('value'));
+            });
+            Promise.all(postPromises.reverse()).then(results => {
+                postsContainer.innerHTML = '';
+                results.forEach(postSnap => {
+                    const post = postSnap.val();
+                    if(post) {
+                        const postDate = new Date(post.createdAt).toLocaleDateString();
+                        const statusClass = `status-${post.status}`;
+                        const statusColor = post.status === 'approved' ? 'success' : post.status === 'pending' ? 'warning' : 'danger';
+                        postsContainer.innerHTML += `
+                            <div class="custom-card post-item-card ${statusClass}">
+                                <div class="post-item-header">
+                                    <span class="badge bg-secondary">${postDate}</span>
+                                    <span class="badge bg-${statusColor} text-capitalize">${post.status}</span>
+                                </div>
+                                <p class="post-item-content">${post.content.substring(0, 100)}...</p>
+                            </div>
+                        `;
+                    }
+                });
+            });
+        });
+    }
+
+    function loadTransactions() {
+        const container = document.getElementById('transactionListContainer');
+        if (!container) return;
+        
+        db.ref(`users/${currentUserData.id}/transactions`).orderByChild('timestamp').on('value', snapshot => {
+            container.innerHTML = '';
+            if (!snapshot.exists()) {
+                container.innerHTML = '<p class="text-center text-secondary">No transactions found.</p>';
+                return;
+            }
+            let transactionsHtml = '';
+            snapshot.forEach(child => {
+                const t = child.val();
+                const isBonus = t.type === 'bonus';
+                transactionsHtml = `
+                    <div class="list-group-item d-flex align-items-center">
+                        <i class="bi ${isBonus ? 'bi-arrow-down-circle-fill text-success' : 'bi-arrow-up-circle-fill text-danger'} me-3"></i>
+                        <div class="flex-grow-1">
+                            <h6>${t.reason}</h6>
+                            <small class="text-secondary">${new Date(t.timestamp).toLocaleString()}</small>
+                        </div>
+                        <h5 class="fw-bold text-${isBonus ? 'success' : 'danger'}">${isBonus ? '+' : '-'}${t.amount}</h5>
+                    </div>
+                ` + transactionsHtml;
+            });
+            container.innerHTML = transactionsHtml;
+        });
+    }
+
+    function setupEventListeners() {
+        document.getElementById('logoutButton').addEventListener('click', (e) => {
+            e.preventDefault();
+            if (confirm("Are you sure you want to logout?")) {
+                if (isTelegram) {
+                    window.Telegram.WebApp.close();
+                } else if (currentUserAuth) {
+                    auth.signOut().then(() => window.location.reload());
                 } else {
-                    // Abort transaction
-                    return; 
+                    window.location.reload();
                 }
             }
-            return userData;
-        }, (error, committed, snapshot) => {
-            if (error) {
-                alert('Transaction failed: ' + error);
-            } else if (!committed) {
-                alert('You have already claimed your daily bonus. Please wait.');
-            } else {
-                alert('You have received 20 points!');
-            }
         });
-    });
+
+        document.getElementById('themeSwitch').addEventListener('change', (e) => {
+            document.body.classList.toggle('light-mode', e.target.checked);
+        });
+        
+        document.getElementById('savePasswordBtn').addEventListener('click', () => {
+            const newPassword = document.getElementById('newUserPassword').value;
+            const confirmPassword = document.getElementById('confirmNewUserPassword').value;
+            if (newPassword.length < 6) return showError("Password must be at least 6 characters long.");
+            if (newPassword !== confirmPassword) return showError("Passwords do not match.");
+            db.ref(`users/${currentUserData.id}/password`).set(newPassword).then(() => {
+                bootstrap.Modal.getInstance(document.getElementById('setPasswordModal')).hide();
+                showSuccess("Password set successfully!");
+            });
+        });
+
+        document.getElementById('connectGoogleLink').addEventListener('click', (e) => {
+             e.preventDefault();
+             if(currentUserAuth){
+                currentUserAuth.linkWithPopup(googleProvider).then(result => {
+                    showSuccess('Google account linked successfully!');
+                    db.ref(`users/${result.user.uid}/email`).set(result.user.email);
+                    updateAccountLinkingUI(currentUserData);
+                }).catch(error => showError(`Could not link account: ${error.message}`));
+             }
+        });
+
+        const createPostForm = document.getElementById('createPostForm');
+        if (createPostForm) {
+            createPostForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const postCost = settings.postCost || 100;
+                if(currentUserData.points < postCost) { return showError(`You need at least ${postCost} points to create a post.`); }
+                const content = document.getElementById('postContent').value.trim();
+                if(!content) return showError("Post content cannot be empty.");
+                const selectedTags = Array.from(document.querySelectorAll('#postTagsContainer .tag-btn.selected')).map(btn => btn.dataset.tag);
+                if(selectedTags.length === 0) return showError("Please select at least one tag.");
+
+                const postData = { userId: currentUserData.id, userName: currentUserData.name, content: content, tags: selectedTags, status: 'pending', createdAt: firebase.database.ServerValue.TIMESTAMP };
+                const newPostKey = db.ref('posts').push().key;
+                const updates = {};
+                updates[`/posts/${newPostKey}`] = postData;
+                updates[`/users/${currentUserData.id}/posts/${newPostKey}`] = true;
+                updates[`/users/${currentUserData.id}/points`] = currentUserData.points - postCost;
+                const transactionData = { type: 'expense', amount: postCost, reason: 'Created a new post', timestamp: firebase.database.ServerValue.TIMESTAMP };
+                const newTransactionKey = db.ref(`users/${currentUserData.id}/transactions`).push().key;
+                updates[`/users/${currentUserData.id}/transactions/${newTransactionKey}`] = transactionData;
+
+                db.ref().update(updates).then(() => {
+                    showSuccess("Post submitted for review!");
+                    createPostForm.reset();
+                    document.querySelectorAll('#postTagsContainer .tag-btn.selected').forEach(b => b.classList.remove('selected'));
+                    navigateToSection('posts-section');
+                }).catch(error => showError("Could not create post: " + error.message));
+            });
+        }
+
+        const dailyBonusLink = document.getElementById('dailyBonusLink');
+        if (dailyBonusLink) {
+            dailyBonusLink.addEventListener('click', (e) => {
+                e.preventDefault();
+                const now = Date.now();
+                const lastBonusTime = currentUserData.lastDailyBonus || 0;
+                const twentyFourHours = 24 * 60 * 60 * 1000;
+
+                if (now - lastBonusTime > twentyFourHours) {
+                    const bonusAmount = settings.dailyBonus || 20;
+                    const updates = {};
+                    updates[`/users/${currentUserData.id}/points`] = currentUserData.points + bonusAmount;
+                    updates[`/users/${currentUserData.id}/lastDailyBonus`] = now;
+                    const transactionData = { type: 'bonus', amount: bonusAmount, reason: 'Daily Bonus', timestamp: now };
+                    const newTransactionKey = db.ref(`users/${currentUserData.id}/transactions`).push().key;
+                    updates[`/users/${currentUserData.id}/transactions/${newTransactionKey}`] = transactionData;
+                    
+                    db.ref().update(updates).then(() => {
+                        showSuccess(`You received ${bonusAmount} points as a daily bonus!`);
+                    });
+                } else {
+                    showError("You have already claimed your daily bonus. Please try again later.");
+                }
+            });
+        }
+    }
+
+    function showError(message) { alert(`Error: ${message}`); console.error(message); }
+    function showSuccess(message) { alert(`Success: ${message}`); }
+
 });
