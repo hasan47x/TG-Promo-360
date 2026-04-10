@@ -91,7 +91,6 @@ body.light-mode .btn-close { filter: none; }
 // ===              COMPONENTS & ELEMENTS              ===
 // ======================================================= */
 .section-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 20px; color: var(--text-primary); }
-.section-title1 { font-size: 1.2rem; font-weight: 600; margin-bottom: 20px; color: var(--text-primary); }
 .custom-card { background-color: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 15px; border: 1px solid var(--border-color); overflow: hidden; }
 .btn-custom-accent { background: linear-gradient(to right, #FACC15, #FBBF24); color: #1E293B; font-weight: 600; border: none; transition: transform 0.2s; }
 .btn-custom-accent:hover { transform: translateY(-2px); }
